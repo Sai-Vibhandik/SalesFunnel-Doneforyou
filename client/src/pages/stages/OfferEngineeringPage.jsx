@@ -238,9 +238,20 @@ export default function OfferEngineeringPage() {
         }
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to load offer');
-      if (error.response?.status === 403) {
+      // Only show error for actual failures
+      const errorMessage = error?.message || error?.response?.data?.message || 'Failed to load offer';
+      const statusCode = error?.response?.status || error?.status;
+
+      console.error('Offer fetch error:', error);
+
+      if (statusCode === 403) {
+        toast.error('Complete Market Research first to access Offer Engineering');
         navigate('/projects');
+      } else if (statusCode === 404) {
+        toast.error('Project not found');
+        navigate('/projects');
+      } else {
+        toast.error(errorMessage);
       }
     } finally {
       setLoading(false);
@@ -285,7 +296,9 @@ export default function OfferEngineeringPage() {
         }
       }
     } catch (error) {
-      toast.error(error.message || 'Failed to save offer');
+      console.error('Offer save error:', error);
+      const errorMessage = error?.message || error?.response?.data?.message || 'Failed to save offer';
+      toast.error(errorMessage);
     } finally {
       setSaving(false);
     }

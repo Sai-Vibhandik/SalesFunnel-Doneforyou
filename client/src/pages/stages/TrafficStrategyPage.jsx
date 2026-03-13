@@ -119,9 +119,20 @@ export default function TrafficStrategyPage() {
         }
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to load traffic strategy');
-      if (error.response?.status === 403) {
+      // Only show error for actual failures
+      const errorMessage = error?.message || error?.response?.data?.message || 'Failed to load traffic strategy';
+      const statusCode = error?.response?.status || error?.status;
+
+      console.error('Traffic strategy fetch error:', error);
+
+      if (statusCode === 403) {
+        toast.error('Complete Offer Engineering first to access Traffic Strategy');
         navigate('/projects');
+      } else if (statusCode === 404) {
+        toast.error('Project not found');
+        navigate('/projects');
+      } else {
+        toast.error(errorMessage);
       }
     } finally {
       setLoading(false);
@@ -194,7 +205,9 @@ export default function TrafficStrategyPage() {
         }
       }
     } catch (error) {
-      toast.error(error.message || 'Failed to save traffic strategy');
+      console.error('Traffic strategy save error:', error);
+      const errorMessage = error?.message || error?.response?.data?.message || 'Failed to save traffic strategy';
+      toast.error(errorMessage);
     } finally {
       setSaving(false);
     }

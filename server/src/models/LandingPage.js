@@ -4,11 +4,12 @@ const nurturingSchema = new mongoose.Schema({
   method: {
     type: String,
     enum: ['email', 'whatsapp', 'sms'],
-    required: true
+    default: 'email'
   },
   frequency: {
     type: String,
-    enum: ['daily', 'weekly', 'bi-weekly', 'monthly']
+    enum: ['daily', 'weekly', 'bi-weekly', 'monthly'],
+    default: 'weekly'
   },
   isActive: {
     type: Boolean,
@@ -20,7 +21,7 @@ const leadCaptureSchema = new mongoose.Schema({
   method: {
     type: String,
     enum: ['form', 'calendly', 'whatsapp', 'free_audit'],
-    required: true
+    default: 'form'
   },
   fields: [{
     type: String,
@@ -44,7 +45,7 @@ const landingPageSchema = new mongoose.Schema({
   type: {
     type: String,
     enum: ['video_sales_letter', 'long_form', 'lead_magnet', 'ebook', 'webinar'],
-    required: [true, 'Landing page type is required']
+    default: 'video_sales_letter'
   },
   leadCapture: {
     type: leadCaptureSchema,

@@ -263,9 +263,21 @@ export default function MarketResearchPage() {
         }
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to load market research');
-      if (error.response?.status === 403) {
+      // Only show error for actual failures (network errors, 500 errors, 403, 404)
+      // The API interceptor transforms errors, so error.message is available directly
+      const errorMessage = error?.message || error?.response?.data?.message || 'Failed to load market research';
+      const statusCode = error?.response?.status || error?.status;
+
+      console.error('Market research fetch error:', error);
+
+      if (statusCode === 403) {
+        toast.error('You do not have access to this project');
         navigate('/projects');
+      } else if (statusCode === 404) {
+        toast.error('Project not found');
+        navigate('/projects');
+      } else {
+        toast.error(errorMessage);
       }
     } finally {
       setLoading(false);
@@ -306,7 +318,9 @@ export default function MarketResearchPage() {
         fetchData();
       }
     } catch (error) {
-      toast.error(error.message || 'Failed to save market research');
+      console.error('Market research save error:', error);
+      const errorMessage = error?.message || error?.response?.data?.message || 'Failed to save market research';
+      toast.error(errorMessage);
     } finally {
       setSaving(false);
     }

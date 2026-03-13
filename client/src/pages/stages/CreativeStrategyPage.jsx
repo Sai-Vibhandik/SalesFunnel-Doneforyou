@@ -165,9 +165,20 @@ export default function CreativeStrategyPage() {
         }
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to load creative strategy');
-      if (error.response?.status === 403) {
+      // Only show error for actual failures
+      const errorMessage = error?.message || error?.response?.data?.message || 'Failed to load creative strategy';
+      const statusCode = error?.response?.status || error?.status;
+
+      console.error('Creative strategy fetch error:', error);
+
+      if (statusCode === 403) {
+        toast.error('Complete Landing Page Strategy first to access Creative Strategy');
         navigate('/projects');
+      } else if (statusCode === 404) {
+        toast.error('Project not found');
+        navigate('/projects');
+      } else {
+        toast.error(errorMessage);
       }
     } finally {
       setLoading(false);
@@ -309,7 +320,9 @@ export default function CreativeStrategyPage() {
         navigate(`/projects/${projectId}`);
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to save creative strategy');
+      console.error('Creative strategy save error:', error);
+      const errorMessage = error?.message || 'Failed to save creative strategy';
+      toast.error(errorMessage);
     } finally {
       setSaving(false);
     }

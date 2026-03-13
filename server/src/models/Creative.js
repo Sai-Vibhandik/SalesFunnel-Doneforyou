@@ -64,6 +64,11 @@ const adTypeSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Icon name for UI display
+  icon: {
+    type: String,
+    default: 'Megaphone'
+  },
   // Creative details for this ad type
   creatives: adCreativeDetailsSchema,
   // Order for display purposes

@@ -2,20 +2,16 @@ const mongoose = require('mongoose');
 
 const avatarSchema = new mongoose.Schema({
   ageRange: {
-    type: String,
-    required: true
+    type: String
   },
   location: {
-    type: String,
-    required: true
+    type: String
   },
   income: {
-    type: String,
-    required: true
+    type: String
   },
   profession: {
-    type: String,
-    required: true
+    type: String
   },
   interests: [{
     type: String

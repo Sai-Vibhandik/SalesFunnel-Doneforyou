@@ -17,7 +17,7 @@ const bonusSchema = new mongoose.Schema({
 const pricingSchema = new mongoose.Schema({
   basePrice: {
     type: Number,
-    required: true
+    default: 0
   },
   currency: {
     type: String,
@@ -44,28 +44,28 @@ const offerSchema = new mongoose.Schema({
   },
   functionalValue: {
     type: String,
-    required: [true, 'Functional value is required'],
-    trim: true
+    trim: true,
+    default: ''
   },
   emotionalValue: {
     type: String,
-    required: [true, 'Emotional value is required'],
-    trim: true
+    trim: true,
+    default: ''
   },
   socialValue: {
     type: String,
-    required: [true, 'Social/Status value is required'],
-    trim: true
+    trim: true,
+    default: ''
   },
   economicValue: {
     type: String,
-    required: [true, 'Economic value is required'],
-    trim: true
+    trim: true,
+    default: ''
   },
   experientialValue: {
     type: String,
-    required: [true, 'Experiential value is required'],
-    trim: true
+    trim: true,
+    default: ''
   },
   bonuses: [bonusSchema],
   guarantees: [{

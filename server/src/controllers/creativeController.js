@@ -82,6 +82,10 @@ exports.upsertCreativeStrategy = async (req, res, next) => {
   try {
     const { projectId } = req.params;
 
+    console.log('=== UPSERT CREATIVE STRATEGY ===');
+    console.log('Project ID:', projectId);
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+
     const { project, error } = await checkProjectAccess(projectId, req.user);
     if (error) {
       return res.status(error.status).json({
@@ -102,6 +106,8 @@ exports.upsertCreativeStrategy = async (req, res, next) => {
       stages,
       creativeBrief,
       brandGuidelines,
+      adTypes,
+      additionalNotes,
       isCompleted
     } = req.body;
 
@@ -114,6 +120,8 @@ exports.upsertCreativeStrategy = async (req, res, next) => {
       ],
       creativeBrief: creativeBrief || '',
       brandGuidelines: brandGuidelines || {},
+      adTypes: adTypes || [],
+      additionalNotes: additionalNotes || '',
       createdBy: req.user._id
     };
 
@@ -122,6 +130,8 @@ exports.upsertCreativeStrategy = async (req, res, next) => {
       creativeData.isCompleted = true;
       creativeData.completedAt = new Date();
     }
+
+    console.log('Creative data to save:', JSON.stringify(creativeData, null, 2));
 
     const creativeStrategy = await CreativeStrategy.findOneAndUpdate(
       { projectId },
@@ -132,6 +142,8 @@ exports.upsertCreativeStrategy = async (req, res, next) => {
     // Calculate total creatives
     creativeStrategy.calculateTotal();
     await creativeStrategy.save();
+
+    console.log('Saved creative strategy:', JSON.stringify(creativeStrategy.toObject(), null, 2));
 
     // If completed, update project stage
     if (isCompleted && !project.stages.creativeStrategy.isCompleted) {
@@ -154,6 +166,7 @@ exports.upsertCreativeStrategy = async (req, res, next) => {
       }
     });
   } catch (error) {
+    console.error('Creative strategy save error:', error);
     next(error);
   }
 };
@@ -483,7 +496,7 @@ exports.generateCreativeCards = async (req, res, next) => {
 exports.addAdType = async (req, res, next) => {
   try {
     const { projectId } = req.params;
-    const { typeKey, typeName, isCustom } = req.body;
+    const { typeKey, typeName, isCustom, icon } = req.body;
 
     const { project, error } = await checkProjectAccess(projectId, req.user);
     if (error) {
@@ -525,6 +538,7 @@ exports.addAdType = async (req, res, next) => {
       typeKey,
       typeName,
       isCustom: isCustom || false,
+      icon: icon || 'Megaphone',
       creatives: {
         imageCreatives: 0,
         videoCreatives: 0,
