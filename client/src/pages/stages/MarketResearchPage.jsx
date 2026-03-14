@@ -134,10 +134,10 @@ const STATIC_PROJECT = {
 // Mock market research data
 const STATIC_MARKET_RESEARCH = {
   avatar: {
-    ageRange: '25-34 years',
+    ageRanges: ['25-34 years'],
     location: 'United States, Urban areas',
-    income: '$50,000 - $75,000/year',
-    profession: 'Marketing Manager',
+    incomeLevels: ['$50,000 - $75,000/year'],
+    professions: ['Marketing Manager', 'Business Owner'],
     interests: ['Digital Marketing', 'Business Growth', 'Lead Generation']
   },
   painPoints: ['Low conversion rates', 'High customer acquisition cost', 'Poor lead quality'],
@@ -148,44 +148,88 @@ const STATIC_MARKET_RESEARCH = {
   isCompleted: false
 };
 
-// Reusable AvatarSelectField component to avoid duplicate registration bug
-function AvatarSelectField({ label, fieldName, options, register, watch, setValue }) {
-  const currentValue = watch(fieldName) || '';
-  const isCustom = currentValue && !options.includes(currentValue);
+// Reusable MultiSelectField component for array fields with suggestions
+function MultiSelectField({ label, fieldName, suggestions, watch, setValue, newItem, setNewItem, placeholder }) {
+  const selectedItems = watch(fieldName) || [];
+  const availableSuggestions = suggestions.filter(s => !selectedItems.includes(s));
 
-  const handleSelectChange = (e) => {
-    const val = e.target.value;
-    if (val !== '__custom__') {
-      setValue(fieldName, val);
+  const addItem = () => {
+    if (!newItem.trim()) return;
+    if (selectedItems.includes(newItem.trim())) {
+      toast.info('This item is already added');
+      return;
     }
+    setValue(fieldName, [...selectedItems, newItem.trim()]);
+    setNewItem('');
+  };
+
+  const removeItem = (index) => {
+    const current = [...selectedItems];
+    current.splice(index, 1);
+    setValue(fieldName, current);
+  };
+
+  const addSuggestion = (suggestion) => {
+    if (selectedItems.includes(suggestion)) {
+      toast.info('This item is already added');
+      return;
+    }
+    setValue(fieldName, [...selectedItems, suggestion]);
   };
 
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <select
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-        value={isCustom ? '__custom__' : currentValue}
-        onChange={handleSelectChange}
-      >
-        <option value="">Select {label.toLowerCase()}...</option>
-        {options.map((opt) => (
-          <option key={opt} value={opt}>{opt}</option>
-        ))}
-        <option value="__custom__">Custom...</option>
-      </select>
-      {/* Show custom input only when "Custom..." is selected or a custom value exists */}
-      {(isCustom || currentValue === '') && (
+      <div className="flex gap-2 mb-2">
         <Input
-          placeholder={`Enter custom ${label.toLowerCase()}...`}
-          value={isCustom ? currentValue : ''}
-          onChange={(e) => setValue(fieldName, e.target.value)}
-          className="mt-2"
+          placeholder={placeholder}
+          value={newItem}
+          onChange={(e) => setNewItem(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              addItem();
+            }
+          }}
         />
+        <Button type="button" onClick={addItem}>
+          <Plus className="w-4 h-4" />
+        </Button>
+      </div>
+      {availableSuggestions.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          <span className="text-xs text-gray-500 flex items-center gap-1 mr-1">
+            <Lightbulb className="w-3 h-3" /> Suggestions:
+          </span>
+          {availableSuggestions.slice(0, 6).map((suggestion) => (
+            <button
+              key={suggestion}
+              type="button"
+              onClick={() => addSuggestion(suggestion)}
+              className="text-xs px-2 py-1 bg-gray-100 hover:bg-primary-50 hover:text-primary-700 rounded-full transition-colors"
+            >
+              + {suggestion}
+            </button>
+          ))}
+        </div>
       )}
-      {currentValue && !isCustom && (
-        <p className="text-xs text-primary-600 mt-1">Selected: <strong>{currentValue}</strong></p>
-      )}
+      <div className="flex flex-wrap gap-2">
+        {selectedItems.map((item, index) => (
+          <span
+            key={index}
+            className="inline-flex items-center gap-1 px-3 py-1 bg-primary-50 text-primary-700 rounded-full text-sm"
+          >
+            {item}
+            <button
+              type="button"
+              onClick={() => removeItem(index)}
+              className="hover:text-primary-900"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -202,14 +246,17 @@ export default function MarketResearchPage() {
   const [newPainPoint, setNewPainPoint] = useState('');
   const [newDesire, setNewDesire] = useState('');
   const [newPurchase, setNewPurchase] = useState('');
+  const [newAgeRange, setNewAgeRange] = useState('');
+  const [newIncomeLevel, setNewIncomeLevel] = useState('');
+  const [newProfession, setNewProfession] = useState('');
 
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm({
     defaultValues: {
       avatar: {
-        ageRange: '',
+        ageRanges: [],
         location: '',
-        income: '',
-        profession: '',
+        incomeLevels: [],
+        professions: [],
         interests: [],
       },
       painPoints: [],
@@ -221,6 +268,9 @@ export default function MarketResearchPage() {
 
   // Watch values for display
   const interests = watch('avatar.interests') || [];
+  const ageRanges = watch('avatar.ageRanges') || [];
+  const incomeLevels = watch('avatar.incomeLevels') || [];
+  const professions = watch('avatar.professions') || [];
   const painPoints = watch('painPoints') || [];
   const desires = watch('desires') || [];
   const existingPurchases = watch('existingPurchases') || [];
@@ -239,7 +289,12 @@ export default function MarketResearchPage() {
 
       if (USE_STATIC_DATA) {
         setProject(STATIC_PROJECT);
-        setValue('avatar', STATIC_MARKET_RESEARCH.avatar);
+        setValue('avatar', {
+          ...STATIC_MARKET_RESEARCH.avatar,
+          ageRanges: STATIC_MARKET_RESEARCH.avatar.ageRanges || [],
+          incomeLevels: STATIC_MARKET_RESEARCH.avatar.incomeLevels || [],
+          professions: STATIC_MARKET_RESEARCH.avatar.professions || [],
+        });
         setValue('painPoints', STATIC_MARKET_RESEARCH.painPoints);
         setValue('desires', STATIC_MARKET_RESEARCH.desires);
         setValue('existingPurchases', STATIC_MARKET_RESEARCH.existingPurchases);
@@ -254,7 +309,14 @@ export default function MarketResearchPage() {
         setProject(projectRes.data);
 
         if (dataRes.data) {
-          setValue('avatar', dataRes.data.avatar || {});
+          const avatar = dataRes.data.avatar || {};
+          setValue('avatar', {
+            ageRanges: avatar.ageRanges || [],
+            location: avatar.location || '',
+            incomeLevels: avatar.incomeLevels || [],
+            professions: avatar.professions || [],
+            interests: avatar.interests || [],
+          });
           setValue('painPoints', dataRes.data.painPoints || []);
           setValue('desires', dataRes.data.desires || []);
           setValue('existingPurchases', dataRes.data.existingPurchases || []);
@@ -321,7 +383,11 @@ export default function MarketResearchPage() {
           isCompleted: markComplete,
         });
         toast.success(markComplete ? 'Market research completed!' : 'Progress saved!');
-        fetchData();
+        if (markComplete) {
+          navigate(`/offer-engineering?projectId=${projectId}`);
+        } else {
+          fetchData();
+        }
       }
     } catch (error) {
       console.error('Market research save error:', error);
@@ -367,10 +433,10 @@ export default function MarketResearchPage() {
 
   const calculateProgress = () => {
     const fields = [
-      watch('avatar.ageRange'),
+      ageRanges.length > 0,
       watch('avatar.location'),
-      watch('avatar.income'),
-      watch('avatar.profession'),
+      incomeLevels.length > 0,
+      professions.length > 0,
       painPoints.length > 0,
       desires.length > 0,
       existingPurchases.length > 0,
@@ -428,38 +494,49 @@ export default function MarketResearchPage() {
           </CardHeader>
           <CardBody className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* FIX: Use AvatarSelectField to avoid dual-registration of the same field name */}
-              <AvatarSelectField
-                label="Age Range"
-                fieldName="avatar.ageRange"
-                options={SUGGESTIONS.ageRanges}
-                register={register}
-                watch={watch}
-                setValue={setValue}
-              />
               <Input
                 label="Location"
                 placeholder="e.g., United States, Urban areas"
                 error={errors.avatar?.location?.message}
                 {...register('avatar.location')}
               />
-              <AvatarSelectField
-                label="Income Level"
-                fieldName="avatar.income"
-                options={SUGGESTIONS.incomeLevels}
-                register={register}
-                watch={watch}
-                setValue={setValue}
-              />
-              <AvatarSelectField
-                label="Profession"
-                fieldName="avatar.profession"
-                options={SUGGESTIONS.professions}
-                register={register}
-                watch={watch}
-                setValue={setValue}
-              />
             </div>
+
+            {/* Age Ranges - Multi-select */}
+            <MultiSelectField
+              label="Age Ranges"
+              fieldName="avatar.ageRanges"
+              suggestions={SUGGESTIONS.ageRanges}
+              watch={watch}
+              setValue={setValue}
+              newItem={newAgeRange}
+              setNewItem={setNewAgeRange}
+              placeholder="Add age range..."
+            />
+
+            {/* Income Levels - Multi-select */}
+            <MultiSelectField
+              label="Income Levels"
+              fieldName="avatar.incomeLevels"
+              suggestions={SUGGESTIONS.incomeLevels}
+              watch={watch}
+              setValue={setValue}
+              newItem={newIncomeLevel}
+              setNewItem={setNewIncomeLevel}
+              placeholder="Add income level..."
+            />
+
+            {/* Professions - Multi-select */}
+            <MultiSelectField
+              label="Professions"
+              fieldName="avatar.professions"
+              suggestions={SUGGESTIONS.professions}
+              watch={watch}
+              setValue={setValue}
+              newItem={newProfession}
+              setNewItem={setNewProfession}
+              placeholder="Add profession..."
+            />
 
             {/* Interests */}
             <div>

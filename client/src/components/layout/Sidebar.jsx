@@ -5,13 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import {
   LayoutDashboard,
   FolderKanban,
-  Search,
-  Gift,
-  TrendingUp,
-  FileText,
-  Lightbulb,
   Settings,
-  BarChart3,
   ChevronLeft,
   ChevronRight,
   LogOut,
@@ -22,7 +16,6 @@ import {
   FileCheck,
   BookOpen,
   Briefcase,
-  Layers,
   CheckCircle,
 } from 'lucide-react';
 
@@ -53,13 +46,7 @@ const navigationByRole = {
   performance_marketer: [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Projects', href: '/projects', icon: FolderKanban },
-    { name: 'Market Research', href: '/market-research', icon: Search },
-    { name: 'Offer Engineering', href: '/offer-engineering', icon: Gift },
-    { name: 'Traffic Strategy', href: '/traffic-strategy', icon: TrendingUp },
-    { name: 'Landing Pages', href: '/landing-pages', icon: FileText },
-    { name: 'Creative Strategy', href: '/creative-strategy', icon: Lightbulb },
     { name: 'Creative Approvals', href: '/tasks/approval', icon: CheckCircle },
-    { name: 'Reports', href: '/reports', icon: BarChart3 },
   ],
 
   // GRAPHIC DESIGNER SIDEBAR

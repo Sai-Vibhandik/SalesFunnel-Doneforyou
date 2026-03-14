@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Card, CardBody, CardHeader, Spinner, Badge } from '@/components/ui';
-import { projectService, marketResearchService, offerService, trafficStrategyService, creativeService, landingPageService } from '@/services/api';
+import { projectService, marketResearchService, offerService, trafficStrategyService, creativeService } from '@/services/api';
 import {
   Users, Target, Gift, TrendingUp, Lightbulb, FileText,
   CheckCircle, AlertCircle, Eye, Palette, Code
 } from 'lucide-react';
-import { toast } from 'sonner';
 
 const PLATFORM_LABELS = {
   facebook: 'Facebook',
@@ -45,13 +44,12 @@ export default function ProjectSummary({ projectId, compact = false }) {
       setLoading(true);
 
       // Fetch all strategy data in parallel
-      const [projectRes, mrRes, offerRes, trafficRes, creativeRes, lpRes] = await Promise.all([
+      const [projectRes, mrRes, offerRes, trafficRes, creativeRes] = await Promise.all([
         projectService.getProject(projectId),
         marketResearchService.get(projectId).catch(() => ({ data: null })),
         offerService.get(projectId).catch(() => ({ data: null })),
         trafficStrategyService.get(projectId).catch(() => ({ data: null })),
-        creativeService.get(projectId).catch(() => ({ data: null })),
-        landingPageService.get(projectId).catch(() => ({ data: null }))
+        creativeService.get(projectId).catch(() => ({ data: null }))
       ]);
 
       setProject(projectRes.data);
@@ -59,7 +57,9 @@ export default function ProjectSummary({ projectId, compact = false }) {
       setOffer(offerRes.data);
       setTrafficStrategy(trafficRes.data);
       setCreativeStrategy(creativeRes.data);
-      setLandingPage(lpRes.data);
+      // Landing pages are now embedded in project document
+      // Get the first landing page for summary display (if any)
+      setLandingPage(projectRes.data.landingPages?.[0] || null);
     } catch (error) {
       console.error('Failed to load project summary:', error);
     } finally {
@@ -500,7 +500,7 @@ export default function ProjectSummary({ projectId, compact = false }) {
               <div>
                 <label className="text-sm text-gray-500">Type</label>
                 <p className="mt-1 font-medium text-gray-900">
-                  {landingPage.type?.replace(/_/g, ' ') || 'Not specified'}
+                  {landingPage.funnelType?.replace(/_/g, ' ') || 'Not specified'}
                 </p>
               </div>
               {landingPage.headline && (
@@ -509,10 +509,10 @@ export default function ProjectSummary({ projectId, compact = false }) {
                   <p className="mt-1 font-medium text-gray-900">{landingPage.headline}</p>
                 </div>
               )}
-              {landingPage.leadCapture?.method && (
+              {landingPage.leadCaptureMethod && (
                 <div>
                   <label className="text-sm text-gray-500">Lead Capture</label>
-                  <p className="mt-1 font-medium text-gray-900">{landingPage.leadCapture.method}</p>
+                  <p className="mt-1 font-medium text-gray-900">{landingPage.leadCaptureMethod}</p>
                 </div>
               )}
             </div>

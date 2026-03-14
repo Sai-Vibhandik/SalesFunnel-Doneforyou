@@ -62,6 +62,11 @@ const taskSchema = new mongoose.Schema({
   creativeId: {
     type: mongoose.Schema.Types.ObjectId
   },
+  landingPageId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'LandingPage',
+    description: 'Reference to the landing page this task is associated with'
+  },
   adTypeKey: {
     type: String,
     description: 'Reference to ad type from creative strategy (awareness, consideration, etc.)'
@@ -287,6 +292,7 @@ taskSchema.index({ projectId: 1, status: 1 });
 taskSchema.index({ assignedTo: 1, status: 1 });
 taskSchema.index({ assignedRole: 1, status: 1 });
 taskSchema.index({ taskType: 1, status: 1 });
+taskSchema.index({ landingPageId: 1 });
 
 // Static method to get role for task type
 taskSchema.statics.getRoleForTaskType = function(taskType) {

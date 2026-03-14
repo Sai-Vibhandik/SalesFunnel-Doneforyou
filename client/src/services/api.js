@@ -76,6 +76,13 @@ export const projectService = {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
   getAssignedProjects: (params) => api.get('/projects/assigned', { params }),
+  // Landing Pages (embedded in project)
+  getLandingPages: (projectId) => api.get(`/projects/${projectId}/landing-pages`),
+  addLandingPage: (projectId, data) => api.post(`/projects/${projectId}/landing-pages`, data),
+  getLandingPage: (projectId, landingPageId) => api.get(`/projects/${projectId}/landing-pages/${landingPageId}`),
+  updateLandingPage: (projectId, landingPageId, data) => api.put(`/projects/${projectId}/landing-pages/${landingPageId}`, data),
+  deleteLandingPage: (projectId, landingPageId) => api.delete(`/projects/${projectId}/landing-pages/${landingPageId}`),
+  completeLandingPageStage: (projectId) => api.post(`/projects/${projectId}/landing-pages/complete`),
 };
 
 // Notification service
@@ -121,11 +128,25 @@ export const trafficStrategyService = {
 
 // Landing Page service
 export const landingPageService = {
-  get: (projectId) => api.get(`/landing-pages/${projectId}`),
+  // List all landing pages for a project
+  list: (projectId) => api.get(`/landing-pages/${projectId}`),
+  // Get single landing page
+  get: (projectId, landingPageId) => api.get(`/landing-pages/${projectId}/${landingPageId}`),
+  // Create new landing page
+  create: (projectId, data) => api.post(`/landing-pages/${projectId}`, data),
+  // Update landing page
+  update: (projectId, landingPageId, data) => api.put(`/landing-pages/${projectId}/${landingPageId}`, data),
+  // Delete landing page
+  delete: (projectId, landingPageId) => api.delete(`/landing-pages/${projectId}/${landingPageId}`),
+  // Complete landing page and generate tasks
+  complete: (projectId, landingPageId) => api.post(`/landing-pages/${projectId}/${landingPageId}/complete`),
+  // Add nurturing method
+  addNurturing: (projectId, landingPageId, data) => api.post(`/landing-pages/${projectId}/${landingPageId}/nurturing`, data),
+  // Remove nurturing method
+  removeNurturing: (projectId, landingPageId, nurturingId) =>
+    api.delete(`/landing-pages/${projectId}/${landingPageId}/nurturing/${nurturingId}`),
+  // Legacy method for backward compatibility
   upsert: (projectId, data) => api.post(`/landing-pages/${projectId}`, data),
-  addNurturing: (projectId, data) => api.post(`/landing-pages/${projectId}/nurturing`, data),
-  removeNurturing: (projectId, nurturingId) =>
-    api.delete(`/landing-pages/${projectId}/nurturing/${nurturingId}`),
 };
 
 // Creative Strategy service

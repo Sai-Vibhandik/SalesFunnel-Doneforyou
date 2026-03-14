@@ -39,9 +39,39 @@ const landingPageSchema = new mongoose.Schema({
   projectId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Project',
-    required: true,
-    unique: true
+    required: true
   },
+  name: {
+    type: String,
+    required: true,
+    trim: true,
+    default: 'Main Landing Page'
+  },
+  order: {
+    type: Number,
+    default: 0
+  },
+  // Strategy fields
+  hook: {
+    type: String,
+    trim: true
+  },
+  angle: {
+    type: String,
+    trim: true
+  },
+  platform: {
+    type: String,
+    enum: ['facebook', 'instagram', 'youtube', 'google', 'linkedin', 'tiktok', 'twitter', 'whatsapp', 'multi'],
+    default: 'facebook'
+  },
+  offer: {
+    headline: { type: String, trim: true },
+    description: { type: String, trim: true },
+    price: { type: Number },
+    bonus: { type: String, trim: true }
+  },
+  // Existing fields
   type: {
     type: String,
     enum: ['video_sales_letter', 'long_form', 'lead_magnet', 'ebook', 'webinar'],
@@ -75,6 +105,10 @@ const landingPageSchema = new mongoose.Schema({
     metaDescription: { type: String },
     keywords: [{ type: String }]
   },
+  isActive: {
+    type: Boolean,
+    default: true
+  },
   isCompleted: {
     type: Boolean,
     default: false
@@ -91,14 +125,20 @@ const landingPageSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Compound index for unique order within project
+landingPageSchema.index({ projectId: 1, order: 1 }, { unique: true });
+
 // Calculate completion percentage
 landingPageSchema.methods.calculateCompletion = function() {
   let completedItems = 0;
-  const totalItems = 5;
+  const totalItems = 8;
 
+  if (this.name) completedItems++;
   if (this.type) completedItems++;
+  if (this.hook) completedItems++;
+  if (this.angle) completedItems++;
+  if (this.platform) completedItems++;
   if (this.leadCapture?.method) completedItems++;
-  if (this.nurturing?.length > 0) completedItems++;
   if (this.headline) completedItems++;
   if (this.ctaText) completedItems++;
 

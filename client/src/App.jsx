@@ -23,6 +23,7 @@ import {
   LandingPageStrategyPage,
   CreativeStrategyPage,
 } from '@/pages/stages';
+import LandingPagesListPage from '@/pages/stages/LandingPagesListPage';
 
 // Tasks
 import { TasksPage } from '@/pages/tasks';
@@ -235,6 +236,14 @@ function AppRoutes() {
         />
         <Route
           path="/landing-pages"
+          element={
+            <MarketerRoute>
+              <LandingPagesListPage />
+            </MarketerRoute>
+          }
+        />
+        <Route
+          path="/landing-page-strategy"
           element={
             <MarketerRoute>
               <LandingPageStrategyPage />

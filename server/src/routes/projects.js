@@ -11,7 +11,14 @@ const {
   assignTeam,
   toggleProjectActivation,
   uploadAssets,
-  getAssignedProjects
+  getAssignedProjects,
+  // Landing Pages
+  addLandingPage,
+  getLandingPages,
+  getLandingPage,
+  updateLandingPage,
+  deleteLandingPage,
+  completeLandingPageStage
 } = require('../controllers/projectController');
 const {
   getStrategySummary,
@@ -51,6 +58,19 @@ router.put('/:id/activate', authorize('admin'), toggleProjectActivation);
 
 // Brand assets upload
 router.post('/:id/assets', handleUpload(uploadBrandAssets), uploadAssets);
+
+// Landing Pages Routes
+router.route('/:id/landing-pages')
+  .get(getLandingPages)
+  .post(authorize('admin', 'performance_marketer'), addLandingPage);
+
+router.route('/:id/landing-pages/:landingPageId')
+  .get(getLandingPage)
+  .put(authorize('admin', 'performance_marketer'), updateLandingPage)
+  .delete(authorize('admin', 'performance_marketer'), deleteLandingPage);
+
+// Complete landing page stage
+router.post('/:id/landing-pages/complete', authorize('admin', 'performance_marketer'), completeLandingPageStage);
 
 // Strategy Summary Routes
 router.get('/:projectId/strategy-summary', getStrategySummary);

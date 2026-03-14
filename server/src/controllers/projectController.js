@@ -690,3 +690,294 @@ exports.getDashboardStats = async (req, res, next) => {
 // Export setIO for use in other modules
 exports.setIO = setIO;
 exports.createNotification = createNotification;
+
+// ============================================
+// Landing Pages Management (embedded in Project)
+// ============================================
+
+// @desc    Add landing page to project
+// @route   POST /api/projects/:id/landing-pages
+// @access  Private (Admin, Performance Marketer)
+exports.addLandingPage = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { name, funnelType, platform, hook, angle, cta, offer, messaging, leadCaptureMethod, headline, subheadline } = req.body;
+
+    const project = await Project.findById(id);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
+    }
+
+    // Check access
+    const userId = req.user._id.toString();
+    const isAssigned = project.assignedTeam.performanceMarketer?._id?.toString() === userId;
+    if (req.user.role !== 'admin' && project.createdBy.toString() !== userId && !isAssigned) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to add landing pages to this project'
+      });
+    }
+
+    // Create new landing page object
+    const newLandingPage = {
+      name: name || `Landing Page ${project.landingPages.length + 1}`,
+      funnelType: funnelType || 'video_sales_letter',
+      platform: platform || 'facebook',
+      hook: hook || '',
+      angle: angle || '',
+      cta: cta || '',
+      offer: offer || '',
+      messaging: messaging || '',
+      leadCaptureMethod: leadCaptureMethod || 'form',
+      headline: headline || '',
+      subheadline: subheadline || '',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    project.landingPages.push(newLandingPage);
+    await project.save();
+
+    res.status(201).json({
+      success: true,
+      data: project.landingPages[project.landingPages.length - 1]
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get all landing pages for a project
+// @route   GET /api/projects/:id/landing-pages
+// @access  Private
+exports.getLandingPages = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const project = await Project.findById(id);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
+    }
+
+    // Check access
+    const userId = req.user._id.toString();
+    const isAssigned =
+      project.assignedTeam.performanceMarketer?._id?.toString() === userId ||
+      project.assignedTeam.uiUxDesigner?._id?.toString() === userId ||
+      project.assignedTeam.graphicDesigner?._id?.toString() === userId ||
+      project.assignedTeam.developer?._id?.toString() === userId ||
+      project.assignedTeam.tester?._id?.toString() === userId;
+
+    if (req.user.role !== 'admin' && project.createdBy.toString() !== userId && !isAssigned) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to access this project'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      count: project.landingPages.length,
+      data: project.landingPages
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get single landing page
+// @route   GET /api/projects/:id/landing-pages/:landingPageId
+// @access  Private
+exports.getLandingPage = async (req, res, next) => {
+  try {
+    const { id, landingPageId } = req.params;
+
+    const project = await Project.findById(id);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
+    }
+
+    const landingPage = project.landingPages.id(landingPageId);
+    if (!landingPage) {
+      return res.status(404).json({
+        success: false,
+        message: 'Landing page not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: landingPage
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update landing page
+// @route   PUT /api/projects/:id/landing-pages/:landingPageId
+// @access  Private (Admin, Performance Marketer)
+exports.updateLandingPage = async (req, res, next) => {
+  try {
+    const { id, landingPageId } = req.params;
+    const { name, funnelType, platform, hook, angle, cta, offer, messaging, leadCaptureMethod, headline, subheadline } = req.body;
+
+    const project = await Project.findById(id);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
+    }
+
+    // Check access
+    const userId = req.user._id.toString();
+    const isAssigned = project.assignedTeam.performanceMarketer?._id?.toString() === userId;
+    if (req.user.role !== 'admin' && project.createdBy.toString() !== userId && !isAssigned) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to update landing pages in this project'
+      });
+    }
+
+    const landingPage = project.landingPages.id(landingPageId);
+    if (!landingPage) {
+      return res.status(404).json({
+        success: false,
+        message: 'Landing page not found'
+      });
+    }
+
+    // Update fields
+    if (name !== undefined) landingPage.name = name;
+    if (funnelType !== undefined) landingPage.funnelType = funnelType;
+    if (platform !== undefined) landingPage.platform = platform;
+    if (hook !== undefined) landingPage.hook = hook;
+    if (angle !== undefined) landingPage.angle = angle;
+    if (cta !== undefined) landingPage.cta = cta;
+    if (offer !== undefined) landingPage.offer = offer;
+    if (messaging !== undefined) landingPage.messaging = messaging;
+    if (leadCaptureMethod !== undefined) landingPage.leadCaptureMethod = leadCaptureMethod;
+    if (headline !== undefined) landingPage.headline = headline;
+    if (subheadline !== undefined) landingPage.subheadline = subheadline;
+    landingPage.updatedAt = new Date();
+
+    await project.save();
+
+    res.status(200).json({
+      success: true,
+      data: landingPage
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete landing page
+// @route   DELETE /api/projects/:id/landing-pages/:landingPageId
+// @access  Private (Admin, Performance Marketer)
+exports.deleteLandingPage = async (req, res, next) => {
+  try {
+    const { id, landingPageId } = req.params;
+
+    const project = await Project.findById(id);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
+    }
+
+    // Check access
+    const userId = req.user._id.toString();
+    const isAssigned = project.assignedTeam.performanceMarketer?._id?.toString() === userId;
+    if (req.user.role !== 'admin' && project.createdBy.toString() !== userId && !isAssigned) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to delete landing pages in this project'
+      });
+    }
+
+    const landingPage = project.landingPages.id(landingPageId);
+    if (!landingPage) {
+      return res.status(404).json({
+        success: false,
+        message: 'Landing page not found'
+      });
+    }
+
+    // Remove landing page
+    project.landingPages.pull(landingPageId);
+    await project.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Landing page deleted successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Complete landing page stage
+// @route   POST /api/projects/:id/landing-pages/complete
+// @access  Private (Admin, Performance Marketer)
+exports.completeLandingPageStage = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const project = await Project.findById(id);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
+    }
+
+    // Check access
+    const userId = req.user._id.toString();
+    const isAssigned = project.assignedTeam.performanceMarketer?._id?.toString() === userId;
+    if (req.user.role !== 'admin' && project.createdBy.toString() !== userId && !isAssigned) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to complete this stage'
+      });
+    }
+
+    // Check if there are landing pages
+    if (!project.landingPages || project.landingPages.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Add at least one landing page before completing this stage'
+      });
+    }
+
+    // Mark the landing page stage as complete
+    project.stages.landingPage.isCompleted = true;
+    project.stages.landingPage.completedAt = new Date();
+
+    // Calculate progress
+    project.calculateProgress();
+    await project.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Landing page stage completed successfully',
+      data: {
+        ...project.toObject(),
+        stageStatus: getStageStatus(project)
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};

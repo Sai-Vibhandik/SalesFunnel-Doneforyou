@@ -42,31 +42,26 @@ const offerSchema = new mongoose.Schema({
     required: true,
     unique: true
   },
-  functionalValue: {
+  functionalValues: [{
     type: String,
-    trim: true,
-    default: ''
-  },
-  emotionalValue: {
+    trim: true
+  }],
+  emotionalValues: [{
     type: String,
-    trim: true,
-    default: ''
-  },
-  socialValue: {
+    trim: true
+  }],
+  socialValues: [{
     type: String,
-    trim: true,
-    default: ''
-  },
-  economicValue: {
+    trim: true
+  }],
+  economicValues: [{
     type: String,
-    trim: true,
-    default: ''
-  },
-  experientialValue: {
+    trim: true
+  }],
+  experientialValues: [{
     type: String,
-    trim: true,
-    default: ''
-  },
+    trim: true
+  }],
   bonuses: [bonusSchema],
   guarantees: [{
     type: String,
@@ -99,17 +94,17 @@ const offerSchema = new mongoose.Schema({
 // Calculate completion percentage
 offerSchema.methods.calculateCompletion = function() {
   const requiredFields = [
-    'functionalValue',
-    'emotionalValue',
-    'socialValue',
-    'economicValue',
-    'experientialValue'
+    'functionalValues',
+    'emotionalValues',
+    'socialValues',
+    'economicValues',
+    'experientialValues'
   ];
 
   let completedFields = 0;
 
   requiredFields.forEach(field => {
-    if (this[field] && this[field].trim() !== '') {
+    if (this[field] && this[field].length > 0) {
       completedFields++;
     }
   });

@@ -6,6 +6,7 @@ import { projectService } from '@/services/api';
 import { Card, CardBody, CardHeader, Button, Badge, ProgressBar, Spinner } from '@/components/ui';
 import { StageProgressTracker } from '@/components/workflow';
 import { ProjectSummary, TeamMemberProjectView, TesterProjectView } from '@/components/project';
+import LandingPagesSection from '@/components/landing-pages/LandingPagesSection';
 import {
   ArrowLeft,
   Edit,
@@ -40,6 +41,8 @@ const STAGE_PATHS = {
   landingPage: '/landing-pages',
   creativeStrategy: '/creative-strategy',
 };
+
+// Note: landingPage now redirects to /landing-pages (list) instead of /landing-page-strategy (single)
 
 const STAGE_NAMES = {
   onboarding: 'Customer Onboarding',
@@ -109,6 +112,27 @@ export default function ProjectDetailPage() {
       fetchProject();
     } catch (error) {
       toast.error('Failed to activate project');
+    }
+  };
+
+  // Handle landing pages CRUD
+  const handleLandingPagesSave = async (action, index, data) => {
+    try {
+      if (action === 'add') {
+        await projectService.addLandingPage(id, data);
+      } else if (action === 'update') {
+        const landingPageId = project.landingPages[index]._id;
+        await projectService.updateLandingPage(id, landingPageId, data);
+      } else if (action === 'delete') {
+        const landingPageId = project.landingPages[index]._id;
+        await projectService.deleteLandingPage(id, landingPageId);
+      }
+      // Refresh project data
+      const response = await projectService.getProject(id);
+      setProject(response.data);
+    } catch (error) {
+      console.error('Error saving landing page:', error);
+      throw error;
     }
   };
 
@@ -336,6 +360,16 @@ export default function ProjectDetailPage() {
       {/* Project Summary for Performance Marketer */}
       {isPerformanceMarketer && (
         <ProjectSummary projectId={id} />
+      )}
+
+      {/* Landing Pages Section - For Performance Marketer */}
+      {isPerformanceMarketer && project?.stages?.trafficStrategy?.isCompleted && (
+        <LandingPagesSection
+          projectId={id}
+          landingPages={project?.landingPages || []}
+          onSave={handleLandingPagesSave}
+          loading={loading}
+        />
       )}
 
       {/* Workflow Stages - Only for Non-Admin Performance Marketer */}

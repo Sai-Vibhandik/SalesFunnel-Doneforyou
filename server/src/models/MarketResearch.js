@@ -1,18 +1,18 @@
 const mongoose = require('mongoose');
 
 const avatarSchema = new mongoose.Schema({
-  ageRange: {
+  ageRanges: [{
     type: String
-  },
+  }],
   location: {
     type: String
   },
-  income: {
+  incomeLevels: [{
     type: String
-  },
-  profession: {
+  }],
+  professions: [{
     type: String
-  },
+  }],
   interests: [{
     type: String
   }]
@@ -75,10 +75,10 @@ const marketResearchSchema = new mongoose.Schema({
 // Calculate completion percentage
 marketResearchSchema.methods.calculateCompletion = function() {
   const fields = [
-    'avatar.ageRange',
+    'avatar.ageRanges',
     'avatar.location',
-    'avatar.income',
-    'avatar.profession',
+    'avatar.incomeLevels',
+    'avatar.professions',
     'painPoints',
     'desires',
     'existingPurchases',
@@ -87,10 +87,10 @@ marketResearchSchema.methods.calculateCompletion = function() {
 
   let completedFields = 0;
 
-  if (this.avatar?.ageRange) completedFields++;
+  if (this.avatar?.ageRanges?.length > 0) completedFields++;
   if (this.avatar?.location) completedFields++;
-  if (this.avatar?.income) completedFields++;
-  if (this.avatar?.profession) completedFields++;
+  if (this.avatar?.incomeLevels?.length > 0) completedFields++;
+  if (this.avatar?.professions?.length > 0) completedFields++;
   if (this.painPoints?.length > 0) completedFields++;
   if (this.desires?.length > 0) completedFields++;
   if (this.existingPurchases?.length > 0) completedFields++;

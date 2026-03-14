@@ -136,11 +136,11 @@ const STATIC_PROJECT = {
 
 // Mock offer data
 const STATIC_OFFER = {
-  functionalValue: 'Our platform helps businesses automate their marketing funnels, saving 20+ hours per week on manual tasks.',
-  emotionalValue: 'Feel confident and in control of your marketing, knowing everything is running smoothly without constant oversight.',
-  socialValue: 'Join a community of successful marketers who have scaled their businesses using our proven system.',
-  economicValue: 'Average ROI of 300% within the first 90 days, with reduced ad spend and higher conversion rates.',
-  experientialValue: 'Seamless onboarding experience with dedicated support and step-by-step guidance.',
+  functionalValues: ['Our platform helps businesses automate their marketing funnels, saving 20+ hours per week on manual tasks.'],
+  emotionalValues: ['Feel confident and in control of your marketing, knowing everything is running smoothly without constant oversight.'],
+  socialValues: ['Join a community of successful marketers who have scaled their businesses using our proven system.'],
+  economicValues: ['Average ROI of 300% within the first 90 days, with reduced ad spend and higher conversion rates.'],
+  experientialValues: ['Seamless onboarding experience with dedicated support and step-by-step guidance.'],
   bonuses: [
     { title: 'Marketing Templates Pack', description: '50+ proven templates for emails, ads, and landing pages', value: 297 },
     { title: 'Private Community Access', description: 'Lifetime access to our exclusive marketing community', value: 997 }
@@ -167,14 +167,19 @@ export default function OfferEngineeringPage() {
   const [isCompleted, setIsCompleted] = useState(false);
   const [newGuarantee, setNewGuarantee] = useState('');
   const [newUrgency, setNewUrgency] = useState('');
+  const [newFunctional, setNewFunctional] = useState('');
+  const [newEmotional, setNewEmotional] = useState('');
+  const [newSocial, setNewSocial] = useState('');
+  const [newEconomic, setNewEconomic] = useState('');
+  const [newExperiential, setNewExperiential] = useState('');
 
   const { register, handleSubmit, setValue, watch, control, formState: { errors } } = useForm({
     defaultValues: {
-      functionalValue: '',
-      emotionalValue: '',
-      socialValue: '',
-      economicValue: '',
-      experientialValue: '',
+      functionalValues: [],
+      emotionalValues: [],
+      socialValues: [],
+      economicValues: [],
+      experientialValues: [],
       bonuses: [],
       guarantees: [],
       urgencyTactics: [],
@@ -205,11 +210,11 @@ export default function OfferEngineeringPage() {
       if (USE_STATIC_DATA) {
         // Use static data for development
         setProject(STATIC_PROJECT);
-        setValue('functionalValue', STATIC_OFFER.functionalValue);
-        setValue('emotionalValue', STATIC_OFFER.emotionalValue);
-        setValue('socialValue', STATIC_OFFER.socialValue);
-        setValue('economicValue', STATIC_OFFER.economicValue);
-        setValue('experientialValue', STATIC_OFFER.experientialValue);
+        setValue('functionalValues', STATIC_OFFER.functionalValues || []);
+        setValue('emotionalValues', STATIC_OFFER.emotionalValues || []);
+        setValue('socialValues', STATIC_OFFER.socialValues || []);
+        setValue('economicValues', STATIC_OFFER.economicValues || []);
+        setValue('experientialValues', STATIC_OFFER.experientialValues || []);
         setValue('bonuses', STATIC_OFFER.bonuses);
         setValue('guarantees', STATIC_OFFER.guarantees);
         setValue('urgencyTactics', STATIC_OFFER.urgencyTactics);
@@ -225,11 +230,11 @@ export default function OfferEngineeringPage() {
         setProject(projectRes.data);
 
         if (offerRes.data) {
-          setValue('functionalValue', offerRes.data.functionalValue || '');
-          setValue('emotionalValue', offerRes.data.emotionalValue || '');
-          setValue('socialValue', offerRes.data.socialValue || '');
-          setValue('economicValue', offerRes.data.economicValue || '');
-          setValue('experientialValue', offerRes.data.experientialValue || '');
+          setValue('functionalValues', offerRes.data.functionalValues || []);
+          setValue('emotionalValues', offerRes.data.emotionalValues || []);
+          setValue('socialValues', offerRes.data.socialValues || []);
+          setValue('economicValues', offerRes.data.economicValues || []);
+          setValue('experientialValues', offerRes.data.experientialValues || []);
           setValue('bonuses', offerRes.data.bonuses || []);
           setValue('guarantees', offerRes.data.guarantees || []);
           setValue('urgencyTactics', offerRes.data.urgencyTactics || []);
@@ -329,10 +334,6 @@ export default function OfferEngineeringPage() {
     setValue(field, [...current, suggestion]);
   };
 
-  const insertValueSuggestion = (field, suggestion) => {
-    setValue(field, suggestion);
-  };
-
   const addBonusSuggestion = (bonus) => {
     const currentBonuses = watch('bonuses') || [];
     const exists = currentBonuses.some(b => b.title === bonus.title);
@@ -353,12 +354,18 @@ export default function OfferEngineeringPage() {
 
   // Calculate progress
   const calculateProgress = () => {
+    const functionalValues = watch('functionalValues') || [];
+    const emotionalValues = watch('emotionalValues') || [];
+    const socialValues = watch('socialValues') || [];
+    const economicValues = watch('economicValues') || [];
+    const experientialValues = watch('experientialValues') || [];
+
     const fields = [
-      watch('functionalValue'),
-      watch('emotionalValue'),
-      watch('socialValue'),
-      watch('economicValue'),
-      watch('experientialValue'),
+      functionalValues.length > 0,
+      emotionalValues.length > 0,
+      socialValues.length > 0,
+      economicValues.length > 0,
+      experientialValues.length > 0,
       watch('pricing.basePrice') > 0,
     ];
     const filled = fields.filter(f => f).length;
@@ -412,142 +419,282 @@ export default function OfferEngineeringPage() {
             <p className="text-sm text-gray-500">Define the core value you provide to customers</p>
           </CardHeader>
           <CardBody className="space-y-6">
-            {/* Functional Value */}
+            {/* Functional Values - Multi-select */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Functional Value
+                Functional Values
               </label>
               <p className="text-xs text-gray-500 mb-2">What does your product/service actually do?</p>
-              <Textarea
-                placeholder="Describe the functional benefits..."
-                rows={2}
-                {...register('functionalValue')}
-              />
-              <div className="flex flex-wrap gap-1 mt-2">
+              <div className="flex gap-2 mb-2">
+                <Input
+                  placeholder="Add a functional value..."
+                  value={newFunctional}
+                  onChange={(e) => setNewFunctional(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addItem('functionalValues', newFunctional, setNewFunctional);
+                    }
+                  }}
+                />
+                <Button type="button" onClick={() => addItem('functionalValues', newFunctional, setNewFunctional)}>
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-1 mb-2">
                 <span className="text-xs text-gray-500 flex items-center gap-1 mr-1">
                   <Lightbulb className="w-3 h-3" /> Suggestions:
                 </span>
-                {VALUE_SUGGESTIONS.functional.slice(0, 6).map((suggestion) => (
+                {VALUE_SUGGESTIONS.functional.filter(s => !(watch('functionalValues') || []).includes(s)).slice(0, 6).map((suggestion) => (
                   <button
                     key={suggestion}
                     type="button"
-                    onClick={() => insertValueSuggestion('functionalValue', suggestion)}
+                    onClick={() => addSuggestion('functionalValues', suggestion)}
                     className="text-xs px-2 py-0.5 bg-gray-100 hover:bg-purple-50 hover:text-purple-700 rounded transition-colors"
                   >
-                    {suggestion.substring(0, 30)}...
+                    + {suggestion.substring(0, 25)}...
                   </button>
+                ))}
+              </div>
+              <div className="space-y-2">
+                {(watch('functionalValues') || []).map((value, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-3 bg-purple-50 text-purple-800 rounded-lg"
+                  >
+                    <span className="text-sm">{value}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeItem('functionalValues', index)}
+                      className="text-purple-600 hover:text-purple-800"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
 
-            {/* Emotional Value */}
+            {/* Emotional Values - Multi-select */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Emotional Value
+                Emotional Values
               </label>
               <p className="text-xs text-gray-500 mb-2">How does your customer feel after using it?</p>
-              <Textarea
-                placeholder="Describe the emotional benefits..."
-                rows={2}
-                {...register('emotionalValue')}
-              />
-              <div className="flex flex-wrap gap-1 mt-2">
+              <div className="flex gap-2 mb-2">
+                <Input
+                  placeholder="Add an emotional value..."
+                  value={newEmotional}
+                  onChange={(e) => setNewEmotional(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addItem('emotionalValues', newEmotional, setNewEmotional);
+                    }
+                  }}
+                />
+                <Button type="button" onClick={() => addItem('emotionalValues', newEmotional, setNewEmotional)}>
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-1 mb-2">
                 <span className="text-xs text-gray-500 flex items-center gap-1 mr-1">
                   <Lightbulb className="w-3 h-3" /> Suggestions:
                 </span>
-                {VALUE_SUGGESTIONS.emotional.slice(0, 6).map((suggestion) => (
+                {VALUE_SUGGESTIONS.emotional.filter(s => !(watch('emotionalValues') || []).includes(s)).slice(0, 6).map((suggestion) => (
                   <button
                     key={suggestion}
                     type="button"
-                    onClick={() => insertValueSuggestion('emotionalValue', suggestion)}
+                    onClick={() => addSuggestion('emotionalValues', suggestion)}
                     className="text-xs px-2 py-0.5 bg-gray-100 hover:bg-pink-50 hover:text-pink-700 rounded transition-colors"
                   >
-                    {suggestion.substring(0, 30)}...
+                    + {suggestion.substring(0, 25)}...
                   </button>
+                ))}
+              </div>
+              <div className="space-y-2">
+                {(watch('emotionalValues') || []).map((value, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-3 bg-pink-50 text-pink-800 rounded-lg"
+                  >
+                    <span className="text-sm">{value}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeItem('emotionalValues', index)}
+                      className="text-pink-600 hover:text-pink-800"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
 
-            {/* Social Value */}
+            {/* Social Values - Multi-select */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Social/Status Value
+                Social/Status Values
               </label>
               <p className="text-xs text-gray-500 mb-2">How does it improve their social standing?</p>
-              <Textarea
-                placeholder="Describe the social benefits..."
-                rows={2}
-                {...register('socialValue')}
-              />
-              <div className="flex flex-wrap gap-1 mt-2">
+              <div className="flex gap-2 mb-2">
+                <Input
+                  placeholder="Add a social value..."
+                  value={newSocial}
+                  onChange={(e) => setNewSocial(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addItem('socialValues', newSocial, setNewSocial);
+                    }
+                  }}
+                />
+                <Button type="button" onClick={() => addItem('socialValues', newSocial, setNewSocial)}>
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-1 mb-2">
                 <span className="text-xs text-gray-500 flex items-center gap-1 mr-1">
                   <Lightbulb className="w-3 h-3" /> Suggestions:
                 </span>
-                {VALUE_SUGGESTIONS.social.slice(0, 6).map((suggestion) => (
+                {VALUE_SUGGESTIONS.social.filter(s => !(watch('socialValues') || []).includes(s)).slice(0, 6).map((suggestion) => (
                   <button
                     key={suggestion}
                     type="button"
-                    onClick={() => insertValueSuggestion('socialValue', suggestion)}
+                    onClick={() => addSuggestion('socialValues', suggestion)}
                     className="text-xs px-2 py-0.5 bg-gray-100 hover:bg-blue-50 hover:text-blue-700 rounded transition-colors"
                   >
-                    {suggestion.substring(0, 30)}...
+                    + {suggestion.substring(0, 25)}...
                   </button>
+                ))}
+              </div>
+              <div className="space-y-2">
+                {(watch('socialValues') || []).map((value, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-3 bg-blue-50 text-blue-800 rounded-lg"
+                  >
+                    <span className="text-sm">{value}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeItem('socialValues', index)}
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
 
-            {/* Economic Value */}
+            {/* Economic Values - Multi-select */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Economic Value
+                Economic Values
               </label>
               <p className="text-xs text-gray-500 mb-2">What financial benefits do they receive?</p>
-              <Textarea
-                placeholder="Describe the financial benefits..."
-                rows={2}
-                {...register('economicValue')}
-              />
-              <div className="flex flex-wrap gap-1 mt-2">
+              <div className="flex gap-2 mb-2">
+                <Input
+                  placeholder="Add an economic value..."
+                  value={newEconomic}
+                  onChange={(e) => setNewEconomic(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addItem('economicValues', newEconomic, setNewEconomic);
+                    }
+                  }}
+                />
+                <Button type="button" onClick={() => addItem('economicValues', newEconomic, setNewEconomic)}>
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-1 mb-2">
                 <span className="text-xs text-gray-500 flex items-center gap-1 mr-1">
                   <Lightbulb className="w-3 h-3" /> Suggestions:
                 </span>
-                {VALUE_SUGGESTIONS.economic.slice(0, 6).map((suggestion) => (
+                {VALUE_SUGGESTIONS.economic.filter(s => !(watch('economicValues') || []).includes(s)).slice(0, 6).map((suggestion) => (
                   <button
                     key={suggestion}
                     type="button"
-                    onClick={() => insertValueSuggestion('economicValue', suggestion)}
+                    onClick={() => addSuggestion('economicValues', suggestion)}
                     className="text-xs px-2 py-0.5 bg-gray-100 hover:bg-green-50 hover:text-green-700 rounded transition-colors"
                   >
-                    {suggestion.substring(0, 30)}...
+                    + {suggestion.substring(0, 25)}...
                   </button>
+                ))}
+              </div>
+              <div className="space-y-2">
+                {(watch('economicValues') || []).map((value, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-3 bg-green-50 text-green-800 rounded-lg"
+                  >
+                    <span className="text-sm">{value}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeItem('economicValues', index)}
+                      className="text-green-600 hover:text-green-800"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
 
-            {/* Experiential Value */}
+            {/* Experiential Values - Multi-select */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Experiential Value
+                Experiential Values
               </label>
               <p className="text-xs text-gray-500 mb-2">What unique experience do they get?</p>
-              <Textarea
-                placeholder="Describe the experiential benefits..."
-                rows={2}
-                {...register('experientialValue')}
-              />
-              <div className="flex flex-wrap gap-1 mt-2">
+              <div className="flex gap-2 mb-2">
+                <Input
+                  placeholder="Add an experiential value..."
+                  value={newExperiential}
+                  onChange={(e) => setNewExperiential(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addItem('experientialValues', newExperiential, setNewExperiential);
+                    }
+                  }}
+                />
+                <Button type="button" onClick={() => addItem('experientialValues', newExperiential, setNewExperiential)}>
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-1 mb-2">
                 <span className="text-xs text-gray-500 flex items-center gap-1 mr-1">
                   <Lightbulb className="w-3 h-3" /> Suggestions:
                 </span>
-                {VALUE_SUGGESTIONS.experiential.slice(0, 6).map((suggestion) => (
+                {VALUE_SUGGESTIONS.experiential.filter(s => !(watch('experientialValues') || []).includes(s)).slice(0, 6).map((suggestion) => (
                   <button
                     key={suggestion}
                     type="button"
-                    onClick={() => insertValueSuggestion('experientialValue', suggestion)}
+                    onClick={() => addSuggestion('experientialValues', suggestion)}
                     className="text-xs px-2 py-0.5 bg-gray-100 hover:bg-orange-50 hover:text-orange-700 rounded transition-colors"
                   >
-                    {suggestion.substring(0, 30)}...
+                    + {suggestion.substring(0, 25)}...
                   </button>
+                ))}
+              </div>
+              <div className="space-y-2">
+                {(watch('experientialValues') || []).map((value, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-3 bg-orange-50 text-orange-800 rounded-lg"
+                  >
+                    <span className="text-sm">{value}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeItem('experientialValues', index)}
+                      className="text-orange-600 hover:text-orange-800"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>

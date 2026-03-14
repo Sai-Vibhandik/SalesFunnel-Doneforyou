@@ -1,5 +1,6 @@
 const LandingPage = require('../models/LandingPage');
 const Project = require('../models/Project');
+const Task = require('../models/Task');
 const { completeStage, getStageStatus } = require('../middleware/stageGating');
 const { hasProjectAccess } = require('../utils/auth');
 
@@ -22,10 +23,10 @@ const checkProjectAccess = async (projectId, user) => {
   return { project, error: null };
 };
 
-// @desc    Get landing page strategy for a project
+// @desc    Get all landing pages for a project
 // @route   GET /api/landing-pages/:projectId
 // @access  Private
-exports.getLandingPage = async (req, res, next) => {
+exports.getLandingPages = async (req, res, next) => {
   try {
     const { projectId } = req.params;
 
@@ -45,13 +46,56 @@ exports.getLandingPage = async (req, res, next) => {
       });
     }
 
-    let landingPage = await LandingPage.findOne({ projectId });
+    const landingPages = await LandingPage.find({ projectId, isActive: true })
+      .sort({ order: 1 })
+      .populate('createdBy', 'name email');
+
+    res.status(200).json({
+      success: true,
+      count: landingPages.length,
+      data: landingPages.map(lp => ({
+        ...lp.toObject(),
+        completionPercentage: lp.calculateCompletion()
+      }))
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get single landing page
+// @route   GET /api/landing-pages/:projectId/:landingPageId
+// @access  Private
+exports.getLandingPage = async (req, res, next) => {
+  try {
+    const { projectId, landingPageId } = req.params;
+
+    const { project, error } = await checkProjectAccess(projectId, req.user);
+    if (error) {
+      return res.status(error.status).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    // Check stage access
+    if (!project.stages.trafficStrategy.isCompleted) {
+      return res.status(403).json({
+        success: false,
+        message: 'Complete Traffic Strategy first to access Landing Page Strategy'
+      });
+    }
+
+    const landingPage = await LandingPage.findOne({
+      _id: landingPageId,
+      projectId,
+      isActive: true
+    }).populate('createdBy', 'name email');
 
     if (!landingPage) {
-      // Create default landing page
-      landingPage = await LandingPage.create({
-        projectId,
-        createdBy: req.user._id
+      return res.status(404).json({
+        success: false,
+        message: 'Landing page not found'
       });
     }
 
@@ -67,12 +111,13 @@ exports.getLandingPage = async (req, res, next) => {
   }
 };
 
-// @desc    Create or update landing page strategy
+// @desc    Create new landing page
 // @route   POST /api/landing-pages/:projectId
 // @access  Private
-exports.upsertLandingPage = async (req, res, next) => {
+exports.createLandingPage = async (req, res, next) => {
   try {
     const { projectId } = req.params;
+    const { name, type, hook, angle, platform, leadCapture, nurturing, headline, subheadline, ctaText, designPreferences, seoSettings, offer } = req.body;
 
     const { project, error } = await checkProjectAccess(projectId, req.user);
     if (error) {
@@ -90,21 +135,17 @@ exports.upsertLandingPage = async (req, res, next) => {
       });
     }
 
-    const {
-      type,
-      leadCapture,
-      nurturing,
-      headline,
-      subheadline,
-      ctaText,
-      designPreferences,
-      seoSettings,
-      isCompleted
-    } = req.body;
+    // Get count for auto-ordering
+    const count = await LandingPage.countDocuments({ projectId, isActive: true });
 
-    const landingPageData = {
+    const landingPage = await LandingPage.create({
       projectId,
+      name: name || `Landing Page ${count + 1}`,
+      order: count,
       type: type || 'video_sales_letter',
+      hook: hook || '',
+      angle: angle || '',
+      platform: platform || 'facebook',
       leadCapture: leadCapture || {},
       nurturing: nurturing || [],
       headline: headline || '',
@@ -112,34 +153,204 @@ exports.upsertLandingPage = async (req, res, next) => {
       ctaText: ctaText || '',
       designPreferences: designPreferences || {},
       seoSettings: seoSettings || {},
+      offer: offer || {},
       createdBy: req.user._id
-    };
+    });
 
-    // If marking as completed
-    if (isCompleted) {
-      landingPageData.isCompleted = true;
-      landingPageData.completedAt = new Date();
+    res.status(201).json({
+      success: true,
+      data: {
+        ...landingPage.toObject(),
+        completionPercentage: landingPage.calculateCompletion()
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update landing page
+// @route   PUT /api/landing-pages/:projectId/:landingPageId
+// @access  Private
+exports.updateLandingPage = async (req, res, next) => {
+  try {
+    const { projectId, landingPageId } = req.params;
+
+    const { project, error } = await checkProjectAccess(projectId, req.user);
+    if (error) {
+      return res.status(error.status).json({
+        success: false,
+        message: error.message
+      });
     }
 
-    const landingPage = await LandingPage.findOneAndUpdate(
-      { projectId },
-      landingPageData,
-      { new: true, upsert: true, runValidators: true }
-    );
+    // Check stage access
+    if (!project.stages.trafficStrategy.isCompleted) {
+      return res.status(403).json({
+        success: false,
+        message: 'Complete Traffic Strategy first to access Landing Page Strategy'
+      });
+    }
 
-    // If completed, update project stage
-    if (isCompleted && !project.stages.landingPage.isCompleted) {
+    const landingPage = await LandingPage.findOne({
+      _id: landingPageId,
+      projectId,
+      isActive: true
+    });
+
+    if (!landingPage) {
+      return res.status(404).json({
+        success: false,
+        message: 'Landing page not found'
+      });
+    }
+
+    // Update fields
+    const updatableFields = [
+      'name', 'type', 'hook', 'angle', 'platform', 'leadCapture',
+      'nurturing', 'headline', 'subheadline', 'ctaText',
+      'designPreferences', 'seoSettings', 'offer'
+    ];
+
+    updatableFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        landingPage[field] = req.body[field];
+      }
+    });
+
+    await landingPage.save();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        ...landingPage.toObject(),
+        completionPercentage: landingPage.calculateCompletion()
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete landing page (soft delete)
+// @route   DELETE /api/landing-pages/:projectId/:landingPageId
+// @access  Private
+exports.deleteLandingPage = async (req, res, next) => {
+  try {
+    const { projectId, landingPageId } = req.params;
+
+    const { project, error } = await checkProjectAccess(projectId, req.user);
+    if (error) {
+      return res.status(error.status).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    const landingPage = await LandingPage.findOne({
+      _id: landingPageId,
+      projectId,
+      isActive: true
+    });
+
+    if (!landingPage) {
+      return res.status(404).json({
+        success: false,
+        message: 'Landing page not found'
+      });
+    }
+
+    // Soft delete
+    landingPage.isActive = false;
+    await landingPage.save();
+
+    // Re-order remaining landing pages
+    const remainingLandingPages = await LandingPage.find({
+      projectId,
+      isActive: true,
+      order: { $gt: landingPage.order }
+    }).sort({ order: 1 });
+
+    for (const lp of remainingLandingPages) {
+      lp.order = lp.order - 1;
+      await lp.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Landing page deleted successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Complete landing page and generate tasks
+// @route   POST /api/landing-pages/:projectId/:landingPageId/complete
+// @access  Private
+exports.completeLandingPage = async (req, res, next) => {
+  try {
+    const { projectId, landingPageId } = req.params;
+
+    const { project, error } = await checkProjectAccess(projectId, req.user);
+    if (error) {
+      return res.status(error.status).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    // Check stage access
+    if (!project.stages.trafficStrategy.isCompleted) {
+      return res.status(403).json({
+        success: false,
+        message: 'Complete Traffic Strategy first to access Landing Page Strategy'
+      });
+    }
+
+    const landingPage = await LandingPage.findOne({
+      _id: landingPageId,
+      projectId,
+      isActive: true
+    });
+
+    if (!landingPage) {
+      return res.status(404).json({
+        success: false,
+        message: 'Landing page not found'
+      });
+    }
+
+    // Mark as completed
+    landingPage.isCompleted = true;
+    landingPage.completedAt = new Date();
+    await landingPage.save();
+
+    // Check if this is the first completed landing page - if so, complete the stage
+    const completedCount = await LandingPage.countDocuments({
+      projectId,
+      isCompleted: true,
+      isActive: true
+    });
+
+    // If this is the first completed landing page, mark the stage as complete
+    if (completedCount === 1 && !project.stages.landingPage.isCompleted) {
       await completeStage(projectId, 'landingPage');
     }
+
+    // Generate tasks for this landing page
+    const tasksCreated = await generateLandingPageTasks(project, landingPage, req.user._id);
 
     // Get updated project
     const updatedProject = await Project.findById(projectId);
 
     res.status(200).json({
       success: true,
+      message: 'Landing page completed successfully',
       data: {
         ...landingPage.toObject(),
         completionPercentage: landingPage.calculateCompletion(),
+        tasksCreated: tasksCreated.length,
         projectProgress: {
           overallProgress: updatedProject.overallProgress,
           currentStage: updatedProject.currentStage,
@@ -152,12 +363,96 @@ exports.upsertLandingPage = async (req, res, next) => {
   }
 };
 
+// Helper function to generate tasks for a landing page
+const generateLandingPageTasks = async (project, landingPage, userId) => {
+  const tasks = [];
+
+  // Get strategy context for task generation
+  const MarketResearch = require('../models/MarketResearch');
+  const Offer = require('../models/Offer');
+  const TrafficStrategy = require('../models/TrafficStrategy');
+
+  const [marketResearch, offer, trafficStrategy] = await Promise.all([
+    MarketResearch.findOne({ projectId: project._id }),
+    Offer.findOne({ projectId: project._id }),
+    TrafficStrategy.findOne({ projectId: project._id })
+  ]);
+
+  // Build strategy context
+  const strategyContext = {
+    businessName: project.businessName || project.customerName,
+    industry: '',
+    platform: landingPage.platform,
+    hook: landingPage.hook,
+    creativeAngle: landingPage.angle,
+    headline: landingPage.headline,
+    cta: landingPage.ctaText,
+    targetAudience: '',
+    painPoints: marketResearch?.painPoints || [],
+    desires: marketResearch?.desires || [],
+    offer: offer?.bonuses?.map(b => b.title).join(', ') || ''
+  };
+
+  // Create design task
+  const designTask = {
+    projectId: project._id,
+    landingPageId: landingPage._id,
+    taskTitle: `Design: ${landingPage.name}`,
+    taskType: 'landing_page_design',
+    assetType: 'landing_page_design',
+    assignedRole: 'ui_ux_designer',
+    assignedTo: project.assignedTeam?.uiUxDesigner || null,
+    assignedBy: userId,
+    createdBy: userId,
+    status: 'design_pending',
+    strategyContext,
+    contextLink: `${process.env.CLIENT_URL}/landing-page-strategy?projectId=${project._id}&landingPageId=${landingPage._id}`
+  };
+
+  // Create development task
+  const devTask = {
+    projectId: project._id,
+    landingPageId: landingPage._id,
+    taskTitle: `Develop: ${landingPage.name}`,
+    taskType: 'landing_page_development',
+    assetType: 'landing_page_page',
+    assignedRole: 'developer',
+    assignedTo: project.assignedTeam?.developer || null,
+    assignedBy: userId,
+    createdBy: userId,
+    status: 'development_pending',
+    strategyContext,
+    contextLink: `${process.env.CLIENT_URL}/landing-page-strategy?projectId=${project._id}&landingPageId=${landingPage._id}`
+  };
+
+  tasks.push(designTask, devTask);
+
+  const createdTasks = await Task.insertMany(tasks);
+
+  // Send notifications if assignees exist
+  const Notification = require('../models/Notification');
+  for (const task of createdTasks) {
+    if (task.assignedTo) {
+      await Notification.create({
+        recipient: task.assignedTo,
+        type: 'task_assigned',
+        title: 'New Task Assigned',
+        message: `You have been assigned a new task: "${task.taskTitle}" for landing page "${landingPage.name}"`,
+        projectId: project._id,
+        taskId: task._id
+      });
+    }
+  }
+
+  return createdTasks;
+};
+
 // @desc    Add nurturing method
-// @route   POST /api/landing-pages/:projectId/nurturing
+// @route   POST /api/landing-pages/:projectId/:landingPageId/nurturing
 // @access  Private
 exports.addNurturing = async (req, res, next) => {
   try {
-    const { projectId } = req.params;
+    const { projectId, landingPageId } = req.params;
     const { method, frequency } = req.body;
 
     const { project, error } = await checkProjectAccess(projectId, req.user);
@@ -168,12 +463,16 @@ exports.addNurturing = async (req, res, next) => {
       });
     }
 
-    const landingPage = await LandingPage.findOne({ projectId });
+    const landingPage = await LandingPage.findOne({
+      _id: landingPageId,
+      projectId,
+      isActive: true
+    });
 
     if (!landingPage) {
       return res.status(404).json({
         success: false,
-        message: 'Landing page strategy not found'
+        message: 'Landing page not found'
       });
     }
 
@@ -190,11 +489,11 @@ exports.addNurturing = async (req, res, next) => {
 };
 
 // @desc    Remove nurturing method
-// @route   DELETE /api/landing-pages/:projectId/nurturing/:nurturingId
+// @route   DELETE /api/landing-pages/:projectId/:landingPageId/nurturing/:nurturingId
 // @access  Private
 exports.removeNurturing = async (req, res, next) => {
   try {
-    const { projectId, nurturingId } = req.params;
+    const { projectId, landingPageId, nurturingId } = req.params;
 
     const { project, error } = await checkProjectAccess(projectId, req.user);
     if (error) {
@@ -204,12 +503,16 @@ exports.removeNurturing = async (req, res, next) => {
       });
     }
 
-    const landingPage = await LandingPage.findOne({ projectId });
+    const landingPage = await LandingPage.findOne({
+      _id: landingPageId,
+      projectId,
+      isActive: true
+    });
 
     if (!landingPage) {
       return res.status(404).json({
         success: false,
-        message: 'Landing page strategy not found'
+        message: 'Landing page not found'
       });
     }
 

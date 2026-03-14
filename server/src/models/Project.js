@@ -147,6 +147,65 @@ const projectSchema = new mongoose.Schema({
       completedAt: { type: Date }
     }
   },
+  // Landing Pages array - embedded within project
+  landingPages: [{
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    funnelType: {
+      type: String,
+      enum: ['video_sales_letter', 'long_form', 'lead_magnet', 'ebook', 'webinar'],
+      default: 'video_sales_letter'
+    },
+    platform: {
+      type: String,
+      enum: ['facebook', 'instagram', 'youtube', 'google', 'linkedin', 'tiktok', 'twitter', 'whatsapp', 'multi'],
+      default: 'facebook'
+    },
+    hook: {
+      type: String,
+      trim: true
+    },
+    angle: {
+      type: String,
+      trim: true
+    },
+    cta: {
+      type: String,
+      trim: true
+    },
+    offer: {
+      type: String,
+      trim: true
+    },
+    messaging: {
+      type: String,
+      trim: true
+    },
+    leadCaptureMethod: {
+      type: String,
+      enum: ['form', 'calendly', 'whatsapp', 'free_audit'],
+      default: 'form'
+    },
+    headline: {
+      type: String,
+      trim: true
+    },
+    subheadline: {
+      type: String,
+      trim: true
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

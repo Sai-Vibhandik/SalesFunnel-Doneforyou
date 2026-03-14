@@ -49,11 +49,11 @@ async function generateTasksFromStrategy(projectId, creativeStrategy, completedB
     }
 
     // Get strategy context from all stages
-    const [marketResearch, offer, trafficStrategy, landingPage] = await Promise.all([
+    const [marketResearch, offer, trafficStrategy, landingPages] = await Promise.all([
       MarketResearch.findOne({ projectId }),
       Offer.findOne({ projectId }),
       TrafficStrategy.findOne({ projectId }),
-      LandingPage.findOne({ projectId })
+      LandingPage.find({ projectId, isActive: true }) // Get ALL landing pages
     ]);
 
     // Build strategy context for AI prompts
@@ -72,10 +72,12 @@ async function generateTasksFromStrategy(projectId, creativeStrategy, completedB
       tasks.push(...adTypeTasks);
     }
 
-    // Generate landing page tasks if landing page strategy exists
-    if (landingPage && landingPage.type) {
-      const landingPageTasks = generateLandingPageTasks(landingPage, projectId, strategyContext, project, completedBy, contextLink, contextPdfUrl);
-      tasks.push(...landingPageTasks);
+    // Generate landing page tasks for EACH landing page that is completed
+    for (const landingPage of landingPages) {
+      if (landingPage.isCompleted && landingPage.type) {
+        const landingPageTasks = generateLandingPageTasks(landingPage, projectId, null, strategyContext, project, completedBy, contextLink, contextPdfUrl);
+        tasks.push(...landingPageTasks);
+      }
     }
 
     // Save all tasks
@@ -290,7 +292,7 @@ function generateAdTypeTasks(adType, projectId, creativeStrategyId, strategyCont
 /**
  * Generate tasks for landing page
  */
-function generateLandingPageTasks(landingPage, projectId, strategyContext, project, completedBy, contextLink, contextPdfUrl) {
+function generateLandingPageTasks(landingPage, projectId, creativeStrategyId, strategyContext, project, completedBy, contextLink, contextPdfUrl) {
   const tasks = [];
 
   const uiuxDesigner = project.assignedTeam.uiUxDesigner?._id;
@@ -299,9 +301,11 @@ function generateLandingPageTasks(landingPage, projectId, strategyContext, proje
   // Landing page design task
   const designTask = createTask({
     projectId,
+    landingPageId: landingPage._id, // Add landing page reference
+    creativeStrategyId,
     taskType: 'landing_page_design',
     assetType: 'landing_page_design',
-    taskTitle: `Landing Page Design - ${landingPage.type?.replace(/_/g, ' ') || 'Standard'}`,
+    taskTitle: `Design: ${landingPage.name || 'Landing Page'}`,
     assignedRole: 'ui_ux_designer',
     assignedTo: uiuxDesigner,
     strategyContext,
@@ -312,6 +316,8 @@ function generateLandingPageTasks(landingPage, projectId, strategyContext, proje
     headline: landingPage.headline,
     subheadline: landingPage.subheadline,
     cta: landingPage.ctaText,
+    hook: landingPage.hook,
+    messagingAngle: landingPage.angle,
     completedBy
   });
   designTask.status = 'design_pending';
@@ -320,9 +326,11 @@ function generateLandingPageTasks(landingPage, projectId, strategyContext, proje
   // Landing page development task (will be created after design is approved)
   const devTask = createTask({
     projectId,
+    landingPageId: landingPage._id, // Add landing page reference
+    creativeStrategyId,
     taskType: 'landing_page_development',
     assetType: 'landing_page_page',
-    taskTitle: `Landing Page Development - ${landingPage.type?.replace(/_/g, ' ') || 'Standard'}`,
+    taskTitle: `Develop: ${landingPage.name || 'Landing Page'}`,
     assignedRole: 'developer',
     assignedTo: developer,
     strategyContext,
@@ -344,6 +352,7 @@ function generateLandingPageTasks(landingPage, projectId, strategyContext, proje
 function createTask({
   projectId,
   creativeStrategyId = null,
+  landingPageId = null,
   adTypeKey = null,
   adTypeName = null,
   taskType,
@@ -430,6 +439,10 @@ function createTask({
   if (creativeStrategyId) {
     task.creativeStrategyId = creativeStrategyId;
     task.adTypeKey = adTypeKey;
+  }
+
+  if (landingPageId) {
+    task.landingPageId = landingPageId;
   }
 
   return task;

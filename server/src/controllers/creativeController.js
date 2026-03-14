@@ -38,11 +38,12 @@ exports.getCreativeStrategy = async (req, res, next) => {
       });
     }
 
-    // Check stage access
-    if (!project.stages.landingPage.isCompleted) {
+    // Check stage access - allow if landing pages exist or stage is marked complete
+    const hasLandingPages = project.landingPages && project.landingPages.length > 0;
+    if (!project.stages.landingPage.isCompleted && !hasLandingPages) {
       return res.status(403).json({
         success: false,
-        message: 'Complete Landing Page Strategy first to access Creative Strategy'
+        message: 'Add at least one landing page to access Creative Strategy'
       });
     }
 
@@ -94,11 +95,12 @@ exports.upsertCreativeStrategy = async (req, res, next) => {
       });
     }
 
-    // Check stage access
-    if (!project.stages.landingPage.isCompleted) {
+    // Check stage access - allow if landing pages exist or stage is marked complete
+    const hasLandingPages = project.landingPages && project.landingPages.length > 0;
+    if (!project.stages.landingPage.isCompleted && !hasLandingPages) {
       return res.status(403).json({
         success: false,
-        message: 'Complete Landing Page Strategy first to access Creative Strategy'
+        message: 'Add at least one landing page to access Creative Strategy'
       });
     }
 
