@@ -29,6 +29,7 @@ exports.checkStageAccess = (stageKey) => {
 
       const project = await Project.findById(projectId)
         .populate('assignedTeam.performanceMarketer', '_id')
+        .populate('assignedTeam.contentCreator', '_id')
         .populate('assignedTeam.uiUxDesigner', '_id')
         .populate('assignedTeam.graphicDesigner', '_id')
         .populate('assignedTeam.developer', '_id')
@@ -45,6 +46,7 @@ exports.checkStageAccess = (stageKey) => {
       const userId = req.user._id.toString();
       const isAssigned =
         project.assignedTeam.performanceMarketer?._id?.toString() === userId ||
+        project.assignedTeam.contentCreator?._id?.toString() === userId ||
         project.assignedTeam.uiUxDesigner?._id?.toString() === userId ||
         project.assignedTeam.graphicDesigner?._id?.toString() === userId ||
         project.assignedTeam.developer?._id?.toString() === userId ||
@@ -148,14 +150,23 @@ exports.completeStage = async (projectId, stageKey, completedBy = null) => {
     // Generate tasks automatically when strategy is completed
     try {
       const creativeStrategy = await CreativeStrategy.findOne({ projectId });
-      if (creativeStrategy && creativeStrategy.adTypes && creativeStrategy.adTypes.length > 0) {
+      const landingPages = project.landingPages || [];
+      const hasAdTypes = creativeStrategy && creativeStrategy.adTypes && creativeStrategy.adTypes.length > 0;
+      const hasLandingPages = landingPages.length > 0;
+
+      console.log(`Task generation check: hasAdTypes=${hasAdTypes}, hasLandingPages=${hasLandingPages}`);
+
+      if (hasAdTypes || hasLandingPages) {
         // Use the completedBy user if provided, otherwise use project creator
         const taskCreator = completedBy || project.createdBy;
         const tasks = await generateTasksFromStrategy(projectId, creativeStrategy, taskCreator);
         console.log(`Generated ${tasks.length} tasks for project ${projectDisplay}`);
+      } else {
+        console.log(`No tasks generated: No ad types or landing pages found for project ${projectDisplay}`);
       }
     } catch (error) {
       console.error('Error generating tasks after strategy completion:', error);
+      console.error('Error stack:', error.stack);
       // Don't throw - we don't want to fail the stage completion if task generation fails
     }
   }

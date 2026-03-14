@@ -495,7 +495,7 @@ exports.deleteTeamMember = async (req, res, next) => {
 // @access  Private
 exports.getTeamByRole = async (req, res, next) => {
   try {
-    const roles = ['performance_marketer', 'ui_ux_designer', 'graphic_designer', 'developer', 'tester'];
+    const roles = ['performance_marketer', 'content_creator', 'ui_ux_designer', 'graphic_designer', 'developer', 'tester'];
 
     const teamByRole = {};
 

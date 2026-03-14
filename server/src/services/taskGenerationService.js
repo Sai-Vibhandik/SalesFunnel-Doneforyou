@@ -39,6 +39,7 @@ async function generateTasksFromStrategy(projectId, creativeStrategy, completedB
     // Get project with team assignments
     const project = await Project.findById(projectId)
       .populate('assignedTeam.performanceMarketer', 'name email')
+      .populate('assignedTeam.contentCreator', 'name email')
       .populate('assignedTeam.uiUxDesigner', 'name email')
       .populate('assignedTeam.graphicDesigner', 'name email')
       .populate('assignedTeam.developer', 'name email')
@@ -49,12 +50,16 @@ async function generateTasksFromStrategy(projectId, creativeStrategy, completedB
     }
 
     // Get strategy context from all stages
-    const [marketResearch, offer, trafficStrategy, landingPages] = await Promise.all([
+    // IMPORTANT: Landing pages are stored in a separate LandingPage collection, not embedded in Project
+    const [marketResearch, offer, trafficStrategy, landingPagesData] = await Promise.all([
       MarketResearch.findOne({ projectId }),
       Offer.findOne({ projectId }),
       TrafficStrategy.findOne({ projectId }),
-      LandingPage.find({ projectId, isActive: true }) // Get ALL landing pages
+      LandingPage.find({ projectId, isActive: true }).sort({ order: 1 })
     ]);
+
+    // Use landing pages from the separate collection
+    const landingPages = landingPagesData || [];
 
     // Build strategy context for AI prompts
     const strategyContext = buildStrategyContext(marketResearch, offer, trafficStrategy, creativeStrategy, project);
@@ -63,21 +68,37 @@ async function generateTasksFromStrategy(projectId, creativeStrategy, completedB
     const contextLink = `/projects/${projectId}/strategy-summary`;
     const contextPdfUrl = `/api/projects/${projectId}/strategy-summary/text`;
 
-    // Generate tasks from creative strategy ad types
+    // Generate tasks from creative strategy ad types (if creative strategy exists)
     const tasks = [];
-    const adTypes = creativeStrategy.adTypes || [];
+    const adTypes = creativeStrategy?.adTypes || [];
+
+    console.log(`Generating tasks for project ${project.businessName}:`);
+    console.log(`- Ad types: ${adTypes.length}`);
+    console.log(`- Landing pages: ${landingPages.length}`);
+    console.log(`- Team assignments:`, {
+      contentCreator: project.assignedTeam?.contentCreator?._id || 'none',
+      graphicDesigner: project.assignedTeam?.graphicDesigner?._id || 'none',
+      uiUxDesigner: project.assignedTeam?.uiUxDesigner?._id || 'none',
+      developer: project.assignedTeam?.developer?._id || 'none',
+      tester: project.assignedTeam?.tester?._id || 'none'
+    });
 
     for (const adType of adTypes) {
-      const adTypeTasks = generateAdTypeTasks(adType, projectId, creativeStrategy._id, strategyContext, project, completedBy, contextLink, contextPdfUrl);
+      const adTypeTasks = generateAdTypeTasks(adType, projectId, creativeStrategy?._id || null, strategyContext, project, completedBy, contextLink, contextPdfUrl);
       tasks.push(...adTypeTasks);
     }
 
-    // Generate landing page tasks for EACH landing page that is completed
+    // Generate landing page tasks for EACH landing page
+    // Landing pages are stored in a separate LandingPage collection
     for (const landingPage of landingPages) {
-      if (landingPage.isCompleted && landingPage.type) {
-        const landingPageTasks = generateLandingPageTasks(landingPage, projectId, null, strategyContext, project, completedBy, contextLink, contextPdfUrl);
-        tasks.push(...landingPageTasks);
-      }
+      const landingPageTasks = generateLandingPageTasks(landingPage, projectId, creativeStrategy?._id || null, strategyContext, project, completedBy, contextLink, contextPdfUrl);
+      tasks.push(...landingPageTasks);
+    }
+
+    // Only save if there are tasks to create
+    if (tasks.length === 0) {
+      console.log(`No tasks generated for project ${project.businessName} - no ad types or landing pages with assigned team members`);
+      return [];
     }
 
     // Save all tasks
@@ -155,8 +176,8 @@ function buildStrategyContext(marketResearch, offer, trafficStrategy, creativeSt
     context.hooks = (trafficStrategy.hooks || []).map(h => h.content);
   }
 
-  // Extract creative strategy data
-  if (creativeStrategy) {
+  // Extract creative strategy data (handle null creativeStrategy)
+  if (creativeStrategy && creativeStrategy.adTypes) {
     context.creativeTypes = (creativeStrategy.adTypes || []).map(at => ({
       typeKey: at.typeKey,
       typeName: at.typeName,
@@ -182,9 +203,8 @@ function generateAdTypeTasks(adType, projectId, creativeStrategyId, strategyCont
   const creatives = adType.creatives || {};
 
   // Get assigned team members
+  const contentCreator = project.assignedTeam.contentCreator?._id;
   const graphicDesigner = project.assignedTeam.graphicDesigner?._id;
-  const uiuxDesigner = project.assignedTeam.uiUxDesigner?._id;
-  const developer = project.assignedTeam.developer?._id;
   const tester = project.assignedTeam.tester?._id;
 
   // Get platforms array
@@ -193,10 +213,38 @@ function generateAdTypeTasks(adType, projectId, creativeStrategyId, strategyCont
   // Generate image creative tasks
   if (creatives.imageCreatives > 0) {
     for (let i = 0; i < creatives.imageCreatives; i++) {
-      // Assign platform (distribute across platforms if multiple)
       const platform = platforms[i % platforms.length] || 'general';
 
-      const task = createTask({
+      // Content creation task (first in workflow)
+      if (contentCreator) {
+        const contentTask = createTask({
+          projectId,
+          creativeStrategyId,
+          adTypeKey: adType.typeKey,
+          adTypeName: adType.typeName,
+          taskType: 'content_creation',
+          assetType: 'image_creative_content',
+          taskTitle: `${adType.typeName} - Content for Image ${i + 1}`,
+          assignedRole: 'content_creator',
+          assignedTo: contentCreator,
+          strategyContext,
+          contextLink,
+          contextPdfUrl,
+          platform,
+          platforms,
+          hook: creatives.hook,
+          headline: creatives.headline,
+          cta: creatives.cta,
+          messagingAngle: creatives.messagingAngle,
+          notes: creatives.notes,
+          completedBy
+        });
+        contentTask.status = 'content_pending';
+        tasks.push(contentTask);
+      }
+
+      // Design task (after content approved)
+      const designTask = createTask({
         projectId,
         creativeStrategyId,
         adTypeKey: adType.typeKey,
@@ -218,17 +266,50 @@ function generateAdTypeTasks(adType, projectId, creativeStrategyId, strategyCont
         notes: creatives.notes,
         completedBy
       });
-      tasks.push(task);
+      // Set initial status based on content creator presence
+      designTask.status = contentCreator ? 'design_pending' : 'todo';
+      if (contentCreator) {
+        designTask.description = 'This task will become active after content is approved.';
+      }
+      tasks.push(designTask);
     }
   }
 
   // Generate video creative tasks
   if (creatives.videoCreatives > 0) {
     for (let i = 0; i < creatives.videoCreatives; i++) {
-      // Assign platform (distribute across platforms if multiple)
       const platform = platforms[i % platforms.length] || 'general';
 
-      const task = createTask({
+      // Content creation task
+      if (contentCreator) {
+        const contentTask = createTask({
+          projectId,
+          creativeStrategyId,
+          adTypeKey: adType.typeKey,
+          adTypeName: adType.typeName,
+          taskType: 'content_creation',
+          assetType: 'video_creative_content',
+          taskTitle: `${adType.typeName} - Script for Video ${i + 1}`,
+          assignedRole: 'content_creator',
+          assignedTo: contentCreator,
+          strategyContext,
+          contextLink,
+          contextPdfUrl,
+          platform,
+          platforms,
+          hook: creatives.hook,
+          headline: creatives.headline,
+          cta: creatives.cta,
+          messagingAngle: creatives.messagingAngle,
+          notes: creatives.notes,
+          completedBy
+        });
+        contentTask.status = 'content_pending';
+        tasks.push(contentTask);
+      }
+
+      // Design/edit task
+      const videoTask = createTask({
         projectId,
         creativeStrategyId,
         adTypeKey: adType.typeKey,
@@ -236,7 +317,7 @@ function generateAdTypeTasks(adType, projectId, creativeStrategyId, strategyCont
         taskType: 'video_editing',
         assetType: 'video_creative',
         taskTitle: `${adType.typeName} - Video Creative ${i + 1}`,
-        assignedRole: 'graphic_designer', // Video editors are often graphic designers
+        assignedRole: 'graphic_designer',
         assignedTo: graphicDesigner,
         strategyContext,
         contextLink,
@@ -250,17 +331,49 @@ function generateAdTypeTasks(adType, projectId, creativeStrategyId, strategyCont
         notes: creatives.notes,
         completedBy
       });
-      tasks.push(task);
+      videoTask.status = contentCreator ? 'design_pending' : 'todo';
+      if (contentCreator) {
+        videoTask.description = 'This task will become active after content is approved.';
+      }
+      tasks.push(videoTask);
     }
   }
 
   // Generate carousel creative tasks
   if (creatives.carouselCreatives > 0) {
     for (let i = 0; i < creatives.carouselCreatives; i++) {
-      // Assign platform (distribute across platforms if multiple)
       const platform = platforms[i % platforms.length] || 'general';
 
-      const task = createTask({
+      // Content creation task
+      if (contentCreator) {
+        const contentTask = createTask({
+          projectId,
+          creativeStrategyId,
+          adTypeKey: adType.typeKey,
+          adTypeName: adType.typeName,
+          taskType: 'content_creation',
+          assetType: 'carousel_creative_content',
+          taskTitle: `${adType.typeName} - Content for Carousel ${i + 1}`,
+          assignedRole: 'content_creator',
+          assignedTo: contentCreator,
+          strategyContext,
+          contextLink,
+          contextPdfUrl,
+          platform,
+          platforms,
+          hook: creatives.hook,
+          headline: creatives.headline,
+          cta: creatives.cta,
+          messagingAngle: creatives.messagingAngle,
+          notes: creatives.notes,
+          completedBy
+        });
+        contentTask.status = 'content_pending';
+        tasks.push(contentTask);
+      }
+
+      // Design task
+      const carouselTask = createTask({
         projectId,
         creativeStrategyId,
         adTypeKey: adType.typeKey,
@@ -282,7 +395,11 @@ function generateAdTypeTasks(adType, projectId, creativeStrategyId, strategyCont
         notes: creatives.notes,
         completedBy
       });
-      tasks.push(task);
+      carouselTask.status = contentCreator ? 'design_pending' : 'todo';
+      if (contentCreator) {
+        carouselTask.description = 'This task will become active after content is approved.';
+      }
+      tasks.push(carouselTask);
     }
   }
 
@@ -291,6 +408,7 @@ function generateAdTypeTasks(adType, projectId, creativeStrategyId, strategyCont
 
 /**
  * Generate tasks for landing page
+ * Landing Page Workflow: UI_UX_DESIGNER → TESTER → PERFORMANCE_MARKETER → DEVELOPER → TESTER → PERFORMANCE_MARKETER
  */
 function generateLandingPageTasks(landingPage, projectId, creativeStrategyId, strategyContext, project, completedBy, contextLink, contextPdfUrl) {
   const tasks = [];
@@ -298,10 +416,11 @@ function generateLandingPageTasks(landingPage, projectId, creativeStrategyId, st
   const uiuxDesigner = project.assignedTeam.uiUxDesigner?._id;
   const developer = project.assignedTeam.developer?._id;
 
-  // Landing page design task
+  // Landing page design task (starts the workflow)
+  // Status flow: design_pending → design_submitted → design_approved → development_pending → development_submitted → development_approved → final_approved
   const designTask = createTask({
     projectId,
-    landingPageId: landingPage._id, // Add landing page reference
+    landingPageId: landingPage._id,
     creativeStrategyId,
     taskType: 'landing_page_design',
     assetType: 'landing_page_design',
@@ -311,22 +430,23 @@ function generateLandingPageTasks(landingPage, projectId, creativeStrategyId, st
     strategyContext,
     contextLink,
     contextPdfUrl,
-    landingPageType: landingPage.type,
-    leadCapture: landingPage.leadCapture,
+    landingPageType: landingPage.type, // 'type' in LandingPage model
+    leadCapture: landingPage.leadCapture, // Lead capture object
     headline: landingPage.headline,
     subheadline: landingPage.subheadline,
-    cta: landingPage.ctaText,
+    cta: landingPage.ctaText, // 'ctaText' in LandingPage model
     hook: landingPage.hook,
     messagingAngle: landingPage.angle,
+    platform: landingPage.platform,
     completedBy
   });
-  designTask.status = 'design_pending';
+  designTask.status = 'design_pending'; // Ready for UI/UX Designer to start
   tasks.push(designTask);
 
-  // Landing page development task (will be created after design is approved)
+  // Landing page development task (will be activated after design is approved by marketer)
   const devTask = createTask({
     projectId,
-    landingPageId: landingPage._id, // Add landing page reference
+    landingPageId: landingPage._id,
     creativeStrategyId,
     taskType: 'landing_page_development',
     assetType: 'landing_page_page',
@@ -336,11 +456,11 @@ function generateLandingPageTasks(landingPage, projectId, creativeStrategyId, st
     strategyContext,
     contextLink,
     contextPdfUrl,
-    landingPageType: landingPage.type,
+    landingPageType: landingPage.type, // 'type' in LandingPage model
     completedBy
   });
-  devTask.status = 'development_pending';
-  devTask.description = 'This task will become active after the design is approved by the tester.';
+  devTask.status = 'development_pending'; // Waiting for design to be approved
+  devTask.description = 'This task will become active after the design is approved by the marketer.';
   tasks.push(devTask);
 
   return tasks;

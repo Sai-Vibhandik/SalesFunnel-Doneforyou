@@ -10,15 +10,25 @@ import {
 } from 'lucide-react';
 
 const TASK_STATUSES = {
+  // Common statuses
   todo: { label: 'To Do', color: 'bg-gray-100 text-gray-800', icon: ClipboardList },
   in_progress: { label: 'In Progress', color: 'bg-blue-100 text-blue-800', icon: Play },
   submitted: { label: 'Submitted', color: 'bg-yellow-100 text-yellow-800', icon: Send },
   approved_by_tester: { label: 'Tester Approved', color: 'bg-purple-100 text-purple-800', icon: CheckCircle },
   final_approved: { label: 'Completed', color: 'bg-green-100 text-green-800', icon: CheckCircle },
   rejected: { label: 'Rejected', color: 'bg-red-100 text-red-800', icon: XCircle },
+  // Content creation workflow
+  content_pending: { label: 'Content Pending', color: 'bg-orange-100 text-orange-800', icon: FileText },
+  content_submitted: { label: 'Content Review', color: 'bg-yellow-100 text-yellow-800', icon: Send },
+  content_approved: { label: 'Content Approved', color: 'bg-purple-100 text-purple-800', icon: CheckCircle },
+  content_rejected: { label: 'Content Rejected', color: 'bg-red-100 text-red-800', icon: XCircle },
+  content_final_approved: { label: 'Content Final Approved', color: 'bg-green-100 text-green-800', icon: CheckCircle },
+  // Design workflow
   design_pending: { label: 'Design Pending', color: 'bg-orange-100 text-orange-800', icon: ClipboardList },
   design_submitted: { label: 'Design Review', color: 'bg-yellow-100 text-yellow-800', icon: Send },
   design_approved: { label: 'Design Approved', color: 'bg-purple-100 text-purple-800', icon: CheckCircle },
+  design_rejected: { label: 'Design Rejected', color: 'bg-red-100 text-red-800', icon: XCircle },
+  // Landing page development workflow
   development_pending: { label: 'Dev Pending', color: 'bg-orange-100 text-orange-800', icon: ClipboardList },
   development_submitted: { label: 'Dev Review', color: 'bg-yellow-100 text-yellow-800', icon: Send },
   development_approved: { label: 'Dev Approved', color: 'bg-purple-100 text-purple-800', icon: CheckCircle }

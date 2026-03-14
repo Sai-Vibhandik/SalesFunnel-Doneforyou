@@ -22,6 +22,7 @@ exports.hasProjectAccess = (project, user) => {
   // Check if user is assigned to the team
   const isAssigned =
     project.assignedTeam?.performanceMarketer?._id?.toString() === userId ||
+    project.assignedTeam?.contentCreator?._id?.toString() === userId ||
     project.assignedTeam?.uiUxDesigner?._id?.toString() === userId ||
     project.assignedTeam?.graphicDesigner?._id?.toString() === userId ||
     project.assignedTeam?.developer?._id?.toString() === userId ||
@@ -49,6 +50,7 @@ exports.checkProjectAccess = (projectIdParam = 'projectId') => {
 
       const project = await Project.findById(projectId)
         .populate('assignedTeam.performanceMarketer', '_id')
+        .populate('assignedTeam.contentCreator', '_id')
         .populate('assignedTeam.uiUxDesigner', '_id')
         .populate('assignedTeam.graphicDesigner', '_id')
         .populate('assignedTeam.developer', '_id')

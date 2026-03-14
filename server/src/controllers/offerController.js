@@ -7,6 +7,7 @@ const { hasProjectAccess } = require('../utils/auth');
 const checkProjectAccess = async (projectId, user) => {
   const project = await Project.findById(projectId)
     .populate('assignedTeam.performanceMarketer', '_id')
+    .populate('assignedTeam.contentCreator', '_id')
     .populate('assignedTeam.uiUxDesigner', '_id')
     .populate('assignedTeam.graphicDesigner', '_id')
     .populate('assignedTeam.developer', '_id')
@@ -92,11 +93,11 @@ exports.upsertOffer = async (req, res, next) => {
     }
 
     const {
-      functionalValue,
-      emotionalValue,
-      socialValue,
-      economicValue,
-      experientialValue,
+      functionalValues,
+      emotionalValues,
+      socialValues,
+      economicValues,
+      experientialValues,
       bonuses,
       guarantees,
       urgencyTactics,
@@ -106,11 +107,11 @@ exports.upsertOffer = async (req, res, next) => {
 
     const offerData = {
       projectId,
-      functionalValue: functionalValue || '',
-      emotionalValue: emotionalValue || '',
-      socialValue: socialValue || '',
-      economicValue: economicValue || '',
-      experientialValue: experientialValue || '',
+      functionalValues: functionalValues || [],
+      emotionalValues: emotionalValues || [],
+      socialValues: socialValues || [],
+      economicValues: economicValues || [],
+      experientialValues: experientialValues || [],
       bonuses: bonuses || [],
       guarantees: guarantees || [],
       urgencyTactics: urgencyTactics || [],

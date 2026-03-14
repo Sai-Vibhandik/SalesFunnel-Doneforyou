@@ -7,6 +7,7 @@ const { hasProjectAccess } = require('../utils/auth');
 const checkProjectAccess = async (projectId, user) => {
   const project = await Project.findById(projectId)
     .populate('assignedTeam.performanceMarketer', '_id')
+    .populate('assignedTeam.contentCreator', '_id')
     .populate('assignedTeam.uiUxDesigner', '_id')
     .populate('assignedTeam.graphicDesigner', '_id')
     .populate('assignedTeam.developer', '_id')

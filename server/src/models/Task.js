@@ -366,7 +366,8 @@ taskSchema.methods.canBeReviewedByTester = function() {
 taskSchema.methods.canBeApprovedByMarketer = function() {
   const marketerApprovableStatuses = [
     'content_approved',    // Content approved by tester, awaiting marketer
-    'design_approved'       // Design approved by tester, awaiting marketer
+    'design_approved',     // Design approved by tester, awaiting marketer (for creative tasks)
+    'development_approved'  // Development approved by tester, awaiting marketer (for landing pages)
   ];
   return marketerApprovableStatuses.includes(this.status);
 };
@@ -382,7 +383,7 @@ taskSchema.methods.getNextStatus = function(currentStatus, action, taskType) {
   if (currentStatus === 'content_approved' && action === 'reject') return 'content_rejected';
   if (currentStatus === 'content_final_approved' && action === 'start_design') return 'design_pending';
 
-  // Design workflow
+  // Design workflow (for graphic design/video tasks)
   if (currentStatus === 'design_pending' && action === 'submit') return 'design_submitted';
   if (currentStatus === 'design_submitted' && action === 'approve_tester') return 'design_approved';
   if (currentStatus === 'design_submitted' && action === 'reject') return 'design_rejected';
@@ -390,17 +391,23 @@ taskSchema.methods.getNextStatus = function(currentStatus, action, taskType) {
   if (currentStatus === 'design_approved' && action === 'approve_marketer') return 'final_approved';
   if (currentStatus === 'design_approved' && action === 'reject') return 'design_rejected';
 
-  // Landing page workflow
+  // Landing page design workflow (goes to development after marketer approval)
   if (taskType === 'landing_page_design') {
     if (currentStatus === 'design_pending' && action === 'submit') return 'design_submitted';
     if (currentStatus === 'design_submitted' && action === 'approve_tester') return 'design_approved';
     if (currentStatus === 'design_submitted' && action === 'reject') return 'design_rejected';
+    if (currentStatus === 'design_rejected' && action === 'resubmit') return 'design_submitted';
+    if (currentStatus === 'design_approved' && action === 'approve_marketer') return 'development_pending';
+    if (currentStatus === 'design_approved' && action === 'reject') return 'design_rejected';
   }
 
+  // Landing page development workflow
   if (taskType === 'landing_page_development') {
     if (currentStatus === 'development_pending' && action === 'submit') return 'development_submitted';
     if (currentStatus === 'development_submitted' && action === 'approve_tester') return 'development_approved';
     if (currentStatus === 'development_submitted' && action === 'reject') return 'development_pending';
+    if (currentStatus === 'development_approved' && action === 'approve_marketer') return 'final_approved';
+    if (currentStatus === 'development_approved' && action === 'reject') return 'development_pending';
   }
 
   // Standard creative workflow (legacy)

@@ -259,6 +259,27 @@ exports.updateTask = async (req, res, next) => {
       }
       task.status = status;
 
+      // Update assignedRole based on status transition
+      // When submitted for review, assign to tester
+      if (status === 'content_submitted') {
+        task.assignedRole = 'tester';
+      } else if (status === 'design_submitted') {
+        task.assignedRole = 'tester';
+      } else if (status === 'development_submitted') {
+        task.assignedRole = 'tester';
+      }
+      // When rejected, assign back to original role
+      else if (status === 'content_rejected') {
+        task.assignedRole = 'content_creator';
+      } else if (status === 'design_rejected') {
+        // Assign to appropriate designer based on task type
+        if (task.taskType === 'landing_page_design') {
+          task.assignedRole = 'ui_ux_designer';
+        } else {
+          task.assignedRole = 'graphic_designer';
+        }
+      }
+
       // Update timestamps
       if (status === 'in_progress' && !task.startedAt) {
         task.startedAt = new Date();
@@ -411,7 +432,12 @@ exports.testerReview = async (req, res, next) => {
         task.assignedRole = 'content_creator';
       } else if (task.status === 'design_submitted') {
         newStatus = 'design_rejected';
-        task.assignedRole = 'graphic_designer';
+        // Assign back to the appropriate designer based on task type
+        if (task.taskType === 'landing_page_design') {
+          task.assignedRole = 'ui_ux_designer';
+        } else {
+          task.assignedRole = 'graphic_designer';
+        }
       } else if (task.status === 'development_submitted') {
         newStatus = 'development_pending';
         task.assignedRole = 'developer';
@@ -540,7 +566,7 @@ exports.marketerReview = async (req, res, next) => {
     let notificationMessage;
 
     if (approved) {
-      // Determine next status based on current status
+      // Determine next status based on current status and task type
       if (task.status === 'content_approved') {
         // Content approved - move to design phase
         newStatus = 'content_final_approved';
@@ -548,9 +574,23 @@ exports.marketerReview = async (req, res, next) => {
         notificationMessage = `Your content for "${task.taskTitle}" has been approved. It's now ready for design.`;
         notificationType = 'content_final_approved';
       } else if (task.status === 'design_approved') {
-        // Design approved - task complete
+        // Design approved - check task type for next step
+        if (task.taskType === 'landing_page_design') {
+          // Landing page design approved - move to development phase
+          newStatus = 'development_pending';
+          task.assignedRole = 'developer';
+          notificationMessage = `Your design for "${task.taskTitle}" has been approved by the marketer. It's now ready for development.`;
+          notificationType = 'design_approved_for_development';
+        } else {
+          // Creative design approved - task complete
+          newStatus = 'final_approved';
+          notificationMessage = `Your design for "${task.taskTitle}" has been fully approved and is ready for deployment.`;
+          notificationType = 'task_approved_by_marketer';
+        }
+      } else if (task.status === 'development_approved') {
+        // Landing page development approved - task complete
         newStatus = 'final_approved';
-        notificationMessage = `Your design for "${task.taskTitle}" has been fully approved and is ready for deployment.`;
+        notificationMessage = `Your development work for "${task.taskTitle}" has been fully approved and is ready for deployment.`;
         notificationType = 'task_approved_by_marketer';
       } else {
         // Legacy workflow - final approval
@@ -559,13 +599,21 @@ exports.marketerReview = async (req, res, next) => {
         notificationType = 'task_approved_by_marketer';
       }
     } else {
-      // Rejected - determine rejection status
+      // Rejected - determine rejection status based on task type and status
       if (task.status === 'content_approved') {
         newStatus = 'content_rejected';
         task.assignedRole = 'content_creator';
       } else if (task.status === 'design_approved') {
-        newStatus = 'design_rejected';
-        task.assignedRole = 'graphic_designer';
+        if (task.taskType === 'landing_page_design') {
+          newStatus = 'design_rejected';
+          task.assignedRole = 'ui_ux_designer';
+        } else {
+          newStatus = 'design_rejected';
+          task.assignedRole = 'graphic_designer';
+        }
+      } else if (task.status === 'development_approved') {
+        newStatus = 'development_pending';
+        task.assignedRole = 'developer';
       } else {
         newStatus = 'rejected';
         task.assignedRole = Task.getRoleForTaskType(task.taskType);
@@ -609,6 +657,37 @@ exports.marketerReview = async (req, res, next) => {
           type: 'task_assigned',
           title: 'New Design Task',
           message: `Content for "${task.projectId.projectName || task.projectId.businessName}" is approved and ready for design.`,
+          projectId: task.projectId._id
+        });
+      }
+    }
+
+    // If landing page design is approved by marketer, notify developer
+    if (approved && newStatus === 'development_pending' && task.taskType === 'landing_page_design') {
+      const project = await Project.findById(task.projectId._id)
+        .populate('assignedTeam.developer', '_id name');
+
+      // Find the development task for this landing page and activate it
+      const developmentTask = await Task.findOne({
+        projectId: task.projectId._id,
+        landingPageId: task.landingPageId,
+        taskType: 'landing_page_development'
+      });
+
+      if (developmentTask) {
+        // Copy design details to development task
+        developmentTask.designLink = task.designLink;
+        developmentTask.designFile = task.designFile;
+        developmentTask.designNotes = task.designNotes;
+        await developmentTask.save();
+      }
+
+      if (project.assignedTeam.developer) {
+        await Notification.create({
+          recipient: project.assignedTeam.developer._id,
+          type: 'task_assigned',
+          title: 'Landing Page Ready for Development',
+          message: `The design for "${task.projectId.projectName || task.projectId.businessName}" has been approved and is ready for development.`,
           projectId: task.projectId._id
         });
       }
@@ -967,6 +1046,27 @@ exports.getTeamMembers = async (req, res, next) => {
 
 // Helper function to get valid status transitions
 function getValidTransitions(currentStatus, taskType) {
+  // Landing page design has a different workflow - goes to development after approval
+  if (taskType === 'landing_page_design') {
+    const landingPageDesignTransitions = {
+      design_pending: ['design_submitted'],
+      design_submitted: ['design_approved', 'design_rejected'],
+      design_approved: ['development_pending', 'design_rejected'], // Marketer can send to development
+      design_rejected: ['design_submitted']
+    };
+    return landingPageDesignTransitions[currentStatus] || [];
+  }
+
+  // Landing page development workflow
+  if (taskType === 'landing_page_development') {
+    const landingPageDevTransitions = {
+      development_pending: ['development_submitted'],
+      development_submitted: ['development_approved', 'development_pending'], // Reject goes back to pending
+      development_approved: ['final_approved', 'development_pending'] // Marketer approves to final, or rejects
+    };
+    return landingPageDevTransitions[currentStatus] || [];
+  }
+
   const transitions = {
     // Standard creative workflow
     todo: ['in_progress'],
@@ -983,13 +1083,13 @@ function getValidTransitions(currentStatus, taskType) {
     content_rejected: ['content_submitted'],
     content_final_approved: ['design_pending'],
 
-    // Design workflow (after content approval)
+    // Design workflow (for graphic design/video tasks after content approval)
     design_pending: ['design_submitted'],
     design_submitted: ['design_approved', 'design_rejected'],
     design_approved: ['final_approved', 'design_rejected'],
     design_rejected: ['design_submitted'],
 
-    // Landing page workflow
+    // Landing page development (fallback)
     development_pending: ['development_submitted'],
     development_submitted: ['development_approved', 'development_pending'],
     development_approved: ['final_approved', 'rejected']

@@ -1,11 +1,12 @@
 import { useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Card, CardBody, CardHeader, Button, Input, Textarea, Spinner, Badge } from '@/components/ui';
-import { taskService } from '@/services/api';
+import { taskService, projectService } from '@/services/api';
 import {
   ClipboardList, FileText, Palette, Clock, CheckCircle, XCircle, Play,
-  Upload, Send, Eye, ArrowRight, AlertCircle, Video, Layout, Code, X, FileIcon
+  Upload, Send, Eye, ArrowRight, AlertCircle, Video, Layout, Code, X, FileIcon,
+  ArrowLeft
 } from 'lucide-react';
 
 // Task statuses for the production workflow
@@ -15,15 +16,23 @@ const TASK_STATUSES = {
   in_progress: { label: 'In Progress', color: 'bg-blue-100 text-blue-800', icon: Play },
   submitted: { label: 'Submitted', color: 'bg-yellow-100 text-yellow-800', icon: Send },
   approved_by_tester: { label: 'Tester Approved', color: 'bg-purple-100 text-purple-800', icon: CheckCircle },
-  final_approved: { label: 'Final Approved', color: 'bg-green-100 text-green-800', icon: CheckCircle },
+  final_approved: { label: 'Completed', color: 'bg-green-100 text-green-800', icon: CheckCircle },
   rejected: { label: 'Rejected', color: 'bg-red-100 text-red-800', icon: XCircle },
-  // Landing page specific
+  // Content creation workflow
+  content_pending: { label: 'Content Pending', color: 'bg-orange-100 text-orange-800', icon: FileText },
+  content_submitted: { label: 'Content Review', color: 'bg-yellow-100 text-yellow-800', icon: Send },
+  content_approved: { label: 'Content Approved', color: 'bg-purple-100 text-purple-800', icon: CheckCircle },
+  content_rejected: { label: 'Content Rejected', color: 'bg-red-100 text-red-800', icon: XCircle },
+  content_final_approved: { label: 'Content Final Approved', color: 'bg-green-100 text-green-800', icon: CheckCircle },
+  // Design workflow
   design_pending: { label: 'Design Pending', color: 'bg-orange-100 text-orange-800', icon: Layout },
-  design_submitted: { label: 'Design Submitted', color: 'bg-yellow-100 text-yellow-800', icon: Send },
+  design_submitted: { label: 'Design Review', color: 'bg-yellow-100 text-yellow-800', icon: Send },
   design_approved: { label: 'Design Approved', color: 'bg-purple-100 text-purple-800', icon: CheckCircle },
+  design_rejected: { label: 'Design Rejected', color: 'bg-red-100 text-red-800', icon: XCircle },
+  // Landing page development workflow
   development_pending: { label: 'Dev Pending', color: 'bg-orange-100 text-orange-800', icon: Code },
-  development_submitted: { label: 'Dev Submitted', color: 'bg-yellow-100 text-yellow-800', icon: Send },
-  development_approved: { label: 'Dev Approved', color: 'bg-purple-100 text-purple-800', icon: CheckCircle },
+  development_submitted: { label: 'Dev Review', color: 'bg-yellow-100 text-yellow-800', icon: Send },
+  development_approved: { label: 'Dev Approved', color: 'bg-purple-100 text-purple-800', icon: CheckCircle }
 };
 
 const TASK_TYPES = [
@@ -45,9 +54,12 @@ const ASSET_TYPES = [
 ];
 
 export default function TasksPage() {
+  const [searchParams] = useSearchParams();
+  const projectId = searchParams.get('projectId');
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState([]);
+  const [project, setProject] = useState(null);
   const [filter, setFilter] = useState({ status: '', taskType: '' });
   const [selectedTask, setSelectedTask] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -67,8 +79,21 @@ export default function TasksPage() {
   const userRole = localStorage.getItem('userRole');
 
   useEffect(() => {
+    // Fetch project details if projectId is provided
+    if (projectId) {
+      fetchProject();
+    }
     fetchTasks();
-  }, [filter]);
+  }, [filter, projectId]);
+
+  const fetchProject = async () => {
+    try {
+      const res = await projectService.getProject(projectId);
+      setProject(res.data);
+    } catch (error) {
+      console.error('Failed to load project:', error);
+    }
+  };
 
   const fetchTasks = async () => {
     try {
@@ -77,7 +102,11 @@ export default function TasksPage() {
       if (filter.status) params.status = filter.status;
       if (filter.taskType) params.taskType = filter.taskType;
 
-      const res = await taskService.getMyTasks(params);
+      // If projectId is specified, get tasks for that project
+      // Otherwise get tasks for the current user
+      const res = projectId
+        ? await taskService.getProjectTasks(projectId, params)
+        : await taskService.getMyTasks(params);
       setTasks(res.data);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to load tasks');
@@ -240,10 +269,34 @@ export default function TasksPage() {
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">My Tasks</h1>
-          <p className="text-gray-600 mt-1">View and manage your assigned tasks</p>
+        <div className="flex items-center gap-4">
+          {projectId && (
+            <Button
+              variant="ghost"
+              onClick={() => navigate(`/projects/${projectId}`)}
+              className="p-2"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+          )}
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              {projectId ? 'Project Tasks' : 'My Tasks'}
+            </h1>
+            {projectId && project ? (
+              <p className="text-gray-600 mt-1">
+                Tasks for: <span className="font-medium">{project.projectName || project.businessName}</span>
+              </p>
+            ) : (
+              <p className="text-gray-600 mt-1">View and manage your assigned tasks</p>
+            )}
+          </div>
         </div>
+        {projectId && (
+          <Badge variant="success" className="text-sm">
+            Strategy Completed
+          </Badge>
+        )}
       </div>
 
       {/* Filters */}
@@ -285,7 +338,16 @@ export default function TasksPage() {
         <Card>
           <CardBody className="text-center py-12">
             <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">No tasks assigned to you</p>
+            {projectId && project ? (
+              <>
+                <p className="text-gray-500 mb-2">No tasks have been generated for this project yet.</p>
+                <p className="text-sm text-gray-400">
+                  Tasks will appear here after the strategy is completed.
+                </p>
+              </>
+            ) : (
+              <p className="text-gray-500">No tasks assigned to you</p>
+            )}
           </CardBody>
         </Card>
       ) : (

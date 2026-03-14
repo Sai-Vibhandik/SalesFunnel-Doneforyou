@@ -317,7 +317,8 @@ export default function CreativeStrategyPage() {
       toast.success(markComplete ? 'Creative strategy completed!' : 'Progress saved!');
 
       if (markComplete) {
-        navigate(`/projects/${projectId}`);
+        // Navigate to tasks page after completing strategy - execution phase
+        navigate(`/tasks?projectId=${projectId}`);
       }
     } catch (error) {
       console.error('Creative strategy save error:', error);
