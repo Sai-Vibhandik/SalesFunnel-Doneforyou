@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 // Task types for different production workflows
 const TASK_TYPES = [
-  'content_writing',
+  'content_creation',
   'graphic_design',
   'video_editing',
   'landing_page_design',
@@ -14,18 +14,30 @@ const TASK_STATUSES = [
   // Common statuses
   'todo',           // Task created, not started
   'in_progress',    // Assigned user is working on it
-  'submitted',      // Work submitted for review
-  'approved_by_tester', // Tester approved, awaiting marketer review
-  'final_approved', // Fully approved by performance marketer
-  'rejected',       // Rejected with notes
 
-  // Landing page specific statuses
-  'design_pending',        // Landing page: awaiting design
-  'design_submitted',      // Landing page: design submitted for tester review
-  'design_approved',       // Landing page: design approved by tester, awaiting dev
-  'development_pending',    // Landing page: awaiting development
-  'development_submitted',  // Landing page: development submitted for tester review
-  'development_approved'   // Landing page: development approved, awaiting marketer
+  // Content creation workflow
+  'content_pending',        // Awaiting content creator
+  'content_submitted',      // Content submitted for tester review
+  'content_approved',       // Content approved by tester, awaiting marketer review
+  'content_rejected',       // Content rejected
+  'content_final_approved', // Content approved by marketer, ready for design
+
+  // Design workflow
+  'design_pending',         // Awaiting designer
+  'design_submitted',       // Design submitted for tester review
+  'design_approved',        // Design approved by tester, awaiting marketer review
+  'design_rejected',        // Design rejected
+
+  // Final status
+  'final_approved',         // Fully approved by performance marketer
+
+  // Legacy statuses (for backward compatibility)
+  'submitted',              // Work submitted for review
+  'approved_by_tester',     // Tester approved, awaiting marketer review
+  'rejected',               // Rejected with notes
+  'development_pending',     // Landing page: awaiting development
+  'development_submitted',   // Landing page: development submitted for tester review
+  'development_approved'    // Landing page: development approved, awaiting marketer
 ];
 
 // Asset types that can be produced
@@ -42,10 +54,10 @@ const ASSET_TYPES = [
 // Role assignment mapping
 const ROLE_ASSIGNMENT = {
   graphic_design: 'graphic_designer',
-  video_editing: 'graphic_designer', // Video editors can be graphic designers or a separate role
+  video_editing: 'graphic_designer',
   landing_page_design: 'ui_ux_designer',
   landing_page_development: 'developer',
-  content_writing: 'graphic_designer' // Content writers can be designers or a separate role
+  content_creation: 'content_creator'
 };
 
 const taskSchema = new mongoose.Schema({
@@ -94,7 +106,7 @@ const taskSchema = new mongoose.Schema({
   },
   assignedRole: {
     type: String,
-    enum: ['graphic_designer', 'ui_ux_designer', 'developer', 'tester', 'performance_marketer'],
+    enum: ['content_creator', 'graphic_designer', 'ui_ux_designer', 'developer', 'tester', 'performance_marketer'],
     required: true
   },
   assignedBy: {
@@ -207,6 +219,22 @@ const taskSchema = new mongoose.Schema({
     notes: { type: String }
   },
 
+  // Content Creator submission fields
+  contentLink: {
+    type: String,
+    description: 'Link to content (Google Docs, Dropbox, etc.)'
+  },
+  contentFile: {
+    name: { type: String },
+    path: { type: String },
+    publicId: { type: String },
+    uploadedAt: { type: Date, default: Date.now }
+  },
+  contentNotes: {
+    type: String,
+    description: 'Notes from content creator'
+  },
+
   // Submission fields (for designer submission)
   creativeLink: {
     type: String,
@@ -301,6 +329,9 @@ taskSchema.statics.getRoleForTaskType = function(taskType) {
 
 // Static method to get initial status for task type
 taskSchema.statics.getInitialStatus = function(taskType) {
+  if (taskType === 'content_creation') {
+    return 'content_pending';
+  }
   if (taskType === 'landing_page_design') {
     return 'design_pending';
   }
@@ -312,28 +343,58 @@ taskSchema.statics.getInitialStatus = function(taskType) {
 
 // Method to check if task can be submitted
 taskSchema.methods.canSubmit = function() {
-  const submittableStatuses = ['todo', 'in_progress', 'rejected', 'design_pending', 'development_pending'];
+  const submittableStatuses = [
+    'todo', 'in_progress', 'rejected',
+    'content_pending', 'content_rejected',
+    'design_pending', 'design_rejected',
+    'development_pending'
+  ];
   return submittableStatuses.includes(this.status);
 };
 
-// Method to check if task can be approved by tester
-taskSchema.methods.canBeApprovedByTester = function() {
-  const testerReviewableStatuses = ['submitted', 'design_submitted', 'development_submitted'];
+// Method to check if task can be reviewed by tester
+taskSchema.methods.canBeReviewedByTester = function() {
+  const testerReviewableStatuses = [
+    'content_submitted',    // Content creator submitted for tester review
+    'design_submitted',     // Designer submitted for tester review
+    'development_submitted' // Developer submitted for tester review
+  ];
   return testerReviewableStatuses.includes(this.status);
 };
 
 // Method to check if task can be approved by marketer
 taskSchema.methods.canBeApprovedByMarketer = function() {
-  return this.status === 'approved_by_tester' || this.status === 'development_approved';
+  const marketerApprovableStatuses = [
+    'content_approved',    // Content approved by tester, awaiting marketer
+    'design_approved'       // Design approved by tester, awaiting marketer
+  ];
+  return marketerApprovableStatuses.includes(this.status);
 };
 
 // Method to get next status after approval
 taskSchema.methods.getNextStatus = function(currentStatus, action, taskType) {
+  // Content creation workflow
+  if (currentStatus === 'content_pending' && action === 'submit') return 'content_submitted';
+  if (currentStatus === 'content_submitted' && action === 'approve_tester') return 'content_approved';
+  if (currentStatus === 'content_submitted' && action === 'reject') return 'content_rejected';
+  if (currentStatus === 'content_rejected' && action === 'resubmit') return 'content_submitted';
+  if (currentStatus === 'content_approved' && action === 'approve_marketer') return 'content_final_approved';
+  if (currentStatus === 'content_approved' && action === 'reject') return 'content_rejected';
+  if (currentStatus === 'content_final_approved' && action === 'start_design') return 'design_pending';
+
+  // Design workflow
+  if (currentStatus === 'design_pending' && action === 'submit') return 'design_submitted';
+  if (currentStatus === 'design_submitted' && action === 'approve_tester') return 'design_approved';
+  if (currentStatus === 'design_submitted' && action === 'reject') return 'design_rejected';
+  if (currentStatus === 'design_rejected' && action === 'resubmit') return 'design_submitted';
+  if (currentStatus === 'design_approved' && action === 'approve_marketer') return 'final_approved';
+  if (currentStatus === 'design_approved' && action === 'reject') return 'design_rejected';
+
   // Landing page workflow
   if (taskType === 'landing_page_design') {
     if (currentStatus === 'design_pending' && action === 'submit') return 'design_submitted';
     if (currentStatus === 'design_submitted' && action === 'approve_tester') return 'design_approved';
-    if (currentStatus === 'design_submitted' && action === 'reject') return 'design_pending';
+    if (currentStatus === 'design_submitted' && action === 'reject') return 'design_rejected';
   }
 
   if (taskType === 'landing_page_development') {
@@ -342,7 +403,7 @@ taskSchema.methods.getNextStatus = function(currentStatus, action, taskType) {
     if (currentStatus === 'development_submitted' && action === 'reject') return 'development_pending';
   }
 
-  // Standard creative workflow
+  // Standard creative workflow (legacy)
   if (currentStatus === 'todo' && action === 'start') return 'in_progress';
   if (currentStatus === 'in_progress' && action === 'submit') return 'submitted';
   if (currentStatus === 'submitted' && action === 'approve_tester') return 'approved_by_tester';

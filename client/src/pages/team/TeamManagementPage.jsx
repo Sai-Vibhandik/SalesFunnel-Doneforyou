@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 const ROLE_OPTIONS = [
   { value: 'admin', label: 'Admin' },
   { value: 'performance_marketer', label: 'Performance Marketer' },
+  { value: 'content_creator', label: 'Content Creator' },
   { value: 'ui_ux_designer', label: 'UI/UX Designer' },
   { value: 'graphic_designer', label: 'Graphic Designer' },
   { value: 'developer', label: 'Developer' },
@@ -41,6 +42,7 @@ function TeamMemberRow({ member, onEdit, onDelete }) {
   const roleLabels = {
     admin: 'Admin',
     performance_marketer: 'Performance Marketer',
+    content_creator: 'Content Creator',
     ui_ux_designer: 'UI/UX Designer',
     graphic_designer: 'Graphic Designer',
     developer: 'Developer',
@@ -50,6 +52,7 @@ function TeamMemberRow({ member, onEdit, onDelete }) {
   const roleColors = {
     admin: 'bg-red-100 text-red-700',
     performance_marketer: 'bg-blue-100 text-blue-700',
+    content_creator: 'bg-indigo-100 text-indigo-700',
     ui_ux_designer: 'bg-purple-100 text-purple-700',
     graphic_designer: 'bg-pink-100 text-pink-700',
     developer: 'bg-green-100 text-green-700',
@@ -529,6 +532,7 @@ export default function TeamManagementPage() {
   const roleLabels = {
     admin: 'Admin',
     performance_marketer: 'Performance Marketer',
+    content_creator: 'Content Creator',
     ui_ux_designer: 'UI/UX Designer',
     graphic_designer: 'Graphic Designer',
     developer: 'Developer',
@@ -597,12 +601,13 @@ export default function TeamManagementPage() {
       </div>
 
       {/* Team Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {Object.entries(roleLabels).map(([role, label]) => {
           const count = teamMembers.filter(m => m.role === role).length;
           const colors = {
             admin: 'bg-red-500',
             performance_marketer: 'bg-blue-500',
+            content_creator: 'bg-indigo-500',
             ui_ux_designer: 'bg-purple-500',
             graphic_designer: 'bg-pink-500',
             developer: 'bg-green-500',

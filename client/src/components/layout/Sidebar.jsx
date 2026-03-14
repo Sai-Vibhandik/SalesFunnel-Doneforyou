@@ -17,12 +17,14 @@ import {
   BookOpen,
   Briefcase,
   CheckCircle,
+  PenTool,
 } from 'lucide-react';
 
 // Role labels for display
 const roleLabels = {
   admin: 'Admin',
   performance_marketer: 'Performance Marketer',
+  content_creator: 'Content Creator',
   ui_ux_designer: 'UI/UX Designer',
   graphic_designer: 'Designer',
   developer: 'Developer',
@@ -38,7 +40,6 @@ const navigationByRole = {
     { name: 'Projects', href: '/projects', icon: FolderKanban },
     { name: 'Team Management', href: '/team', icon: Users },
     { name: 'SOP Library', href: '/sop-library', icon: BookOpen },
-    { name: 'Reports', href: '/reports', icon: BarChart3 },
     { name: 'Settings', href: '/settings', icon: Settings },
   ],
 
@@ -47,6 +48,13 @@ const navigationByRole = {
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Projects', href: '/projects', icon: FolderKanban },
     { name: 'Creative Approvals', href: '/tasks/approval', icon: CheckCircle },
+  ],
+
+  // CONTENT CREATOR SIDEBAR
+  content_creator: [
+    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { name: 'My Projects', href: '/projects', icon: FolderKanban },
+    { name: 'My Tasks', href: '/tasks', icon: CheckSquare },
   ],
 
   // GRAPHIC DESIGNER SIDEBAR

@@ -56,6 +56,7 @@ const STAGE_NAMES = {
 // Role labels
 const ROLE_LABELS = {
   performanceMarketer: 'Performance Marketer',
+  contentCreator: 'Content Creator',
   uiUxDesigner: 'UI/UX Designer',
   graphicDesigner: 'Graphic Designer',
   developer: 'Developer',

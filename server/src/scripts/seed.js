@@ -23,6 +23,14 @@ const seedUsers = [
     availability: 'available'
   },
   {
+    name: 'Emily Writer',
+    email: 'content@growthvalley.com',
+    password: 'content123',
+    role: 'content_creator',
+    specialization: 'Copywriting, Script Writing',
+    availability: 'available'
+  },
+  {
     name: 'Sarah Wilson',
     email: 'uiux@growthvalley.com',
     password: 'uiux123',
@@ -226,6 +234,7 @@ const seedDatabase = async () => {
     console.log('\nYou can now login with:');
     console.log('  Admin: admin@growthvalley.com / admin123');
     console.log('  Performance Marketer: marketer@growthvalley.com / marketer123');
+    console.log('  Content Creator: content@growthvalley.com / content123');
     console.log('  UI/UX Designer: uiux@growthvalley.com / uiux123');
     console.log('  Graphic Designer: graphic@growthvalley.com / graphic123');
     console.log('  Developer: developer@growthvalley.com / developer123');

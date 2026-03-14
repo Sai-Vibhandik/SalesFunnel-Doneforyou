@@ -92,6 +92,10 @@ const projectSchema = new mongoose.Schema({
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
     },
+    contentCreator: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
     uiUxDesigner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'

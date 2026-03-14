@@ -16,6 +16,12 @@ const ROLE_CONFIG = {
     color: 'bg-blue-100 text-blue-700',
     borderColor: 'border-blue-200',
   },
+  content_creator: {
+    label: 'Content Creator',
+    assignedTeamField: 'contentCreator',
+    color: 'bg-indigo-100 text-indigo-700',
+    borderColor: 'border-indigo-200',
+  },
   ui_ux_designer: {
     label: 'UI/UX Designer',
     assignedTeamField: 'uiUxDesigner',
