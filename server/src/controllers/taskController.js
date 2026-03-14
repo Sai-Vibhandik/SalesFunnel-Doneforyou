@@ -12,6 +12,7 @@ const checkProjectAccess = async (projectId, user) => {
     .populate('assignedTeam.contentCreator', '_id name')
     .populate('assignedTeam.uiUxDesigner', '_id name')
     .populate('assignedTeam.graphicDesigner', '_id name')
+    .populate('assignedTeam.videoEditor', '_id name')
     .populate('assignedTeam.developer', '_id name')
     .populate('assignedTeam.tester', '_id name');
 
@@ -87,10 +88,13 @@ exports.getMyTasks = async (req, res, next) => {
       .populate('assignedBy', 'name email')
       .sort({ priority: -1, dueDate: 1 });
 
+    // Filter out tasks where project was deleted
+    const validTasks = tasks.filter(task => task.projectId !== null);
+
     res.status(200).json({
       success: true,
-      count: tasks.length,
-      data: tasks
+      count: validTasks.length,
+      data: validTasks
     });
   } catch (error) {
     next(error);
@@ -828,10 +832,13 @@ exports.getPendingReviewTasks = async (req, res, next) => {
       .populate('assignedTo', 'name email role')
       .sort({ submittedAt: 1 });
 
+    // Filter out tasks where project was deleted
+    const validTasks = tasks.filter(task => task.projectId !== null);
+
     res.status(200).json({
       success: true,
-      count: tasks.length,
-      data: tasks
+      count: validTasks.length,
+      data: validTasks
     });
   } catch (error) {
     next(error);
@@ -874,10 +881,115 @@ exports.getPendingMarketerApproval = async (req, res, next) => {
       .populate('testerReviewedBy', 'name email')
       .sort({ testerReviewedAt: 1 });
 
+    // Filter out tasks where project was deleted
+    const validTasks = tasks.filter(task => task.projectId !== null);
+
+    res.status(200).json({
+      success: true,
+      count: validTasks.length,
+      data: validTasks
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get approved assets (tasks approved by tester or marketer)
+// @route   GET /api/tasks/approved-assets
+// @access  Private (Tester, Admin, Performance Marketer)
+exports.getApprovedAssets = async (req, res, next) => {
+  try {
+    // Get tasks that have been approved by tester or are fully approved
+    // These are tasks in: approved_by_tester, content_approved, design_approved, development_approved, final_approved
+    const approvedStatuses = [
+      'approved_by_tester',
+      'content_approved',
+      'design_approved',
+      'development_approved',
+      'final_approved',
+      'content_final_approved'
+    ];
+
+    const tasks = await Task.find({
+      status: { $in: approvedStatuses }
+    })
+      .populate('projectId', 'projectName businessName industry')
+      .populate('assignedTo', 'name email role')
+      .populate('assignedBy', 'name email')
+      .populate('testerReviewedBy', 'name email')
+      .populate('marketerApprovedBy', 'name email')
+      .sort({ testerReviewedAt: -1, updatedAt: -1 });
+
+    // Filter out tasks where project was deleted
+    const validTasks = tasks.filter(task => task.projectId !== null);
+
+    res.status(200).json({
+      success: true,
+      count: validTasks.length,
+      data: validTasks
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get completed assets for a specific project
+// @route   GET /api/tasks/project/:projectId/completed
+// @access  Private (requires project access)
+exports.getProjectCompletedAssets = async (req, res, next) => {
+  try {
+    const { projectId } = req.params;
+
+    // Check project access
+    const project = await Project.findById(projectId);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
+    }
+
+    // Get completed/approved statuses
+    const completedStatuses = [
+      'approved_by_tester',
+      'content_approved',
+      'design_approved',
+      'development_approved',
+      'final_approved',
+      'content_final_approved'
+    ];
+
+    const tasks = await Task.find({
+      projectId,
+      status: { $in: completedStatuses }
+    })
+      .populate('assignedTo', 'name email role')
+      .populate('assignedBy', 'name email')
+      .populate('testerReviewedBy', 'name email')
+      .populate('marketerApprovedBy', 'name email')
+      .sort({ updatedAt: -1 });
+
+    // Group tasks by type
+    const groupedTasks = {
+      creatives: tasks.filter(t => ['graphic_design', 'video_editing'].includes(t.taskType)),
+      landingPages: tasks.filter(t => ['landing_page_design', 'landing_page_development'].includes(t.taskType)),
+      content: tasks.filter(t => t.taskType === 'content_creation'),
+      other: tasks.filter(t => !['graphic_design', 'video_editing', 'landing_page_design', 'landing_page_development', 'content_creation'].includes(t.taskType))
+    };
+
     res.status(200).json({
       success: true,
       count: tasks.length,
-      data: tasks
+      data: {
+        project: {
+          _id: project._id,
+          projectName: project.projectName,
+          businessName: project.businessName,
+          industry: project.industry
+        },
+        tasks,
+        groupedTasks
+      }
     });
   } catch (error) {
     next(error);
@@ -957,10 +1069,13 @@ exports.getAllTasks = async (req, res, next) => {
       .populate('assignedBy', 'name email')
       .sort({ createdAt: -1 });
 
+    // Filter out tasks where project was deleted
+    const validTasks = tasks.filter(task => task.projectId !== null);
+
     res.status(200).json({
       success: true,
-      count: tasks.length,
-      data: tasks
+      count: validTasks.length,
+      data: validTasks
     });
   } catch (error) {
     next(error);
@@ -1029,6 +1144,7 @@ exports.getTeamMembers = async (req, res, next) => {
     const grouped = {
       contentCreators: users.filter(u => u.role === 'content_creator'),
       graphicDesigners: users.filter(u => u.role === 'graphic_designer'),
+      videoEditors: users.filter(u => u.role === 'video_editor'),
       uiUxDesigners: users.filter(u => u.role === 'ui_ux_designer'),
       developers: users.filter(u => u.role === 'developer'),
       testers: users.filter(u => u.role === 'tester'),
@@ -1038,6 +1154,135 @@ exports.getTeamMembers = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: grouped
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get tasks by role (for dashboard view)
+// @route   GET /api/tasks/by-role/:role
+// @access  Private
+exports.getTasksByRole = async (req, res, next) => {
+  try {
+    const { role } = req.params;
+    const { status, projectId } = req.query;
+
+    // Validate role
+    const validRoles = [
+      'content_creator', 'graphic_designer', 'video_editor',
+      'ui_ux_designer', 'developer', 'tester', 'performance_marketer'
+    ];
+
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid role. Valid roles are: ${validRoles.join(', ')}`
+      });
+    }
+
+    // For testers, get tasks submitted for review
+    // For performance marketers, get tasks pending their approval
+    // For other roles, get tasks assigned to them
+
+    let query = { assignedRole: role };
+
+    // Role-specific status filters
+    if (role === 'tester') {
+      // Testers see tasks that are submitted for review
+      query.status = { $in: ['content_submitted', 'design_submitted', 'development_submitted'] };
+    } else if (role === 'performance_marketer') {
+      // Performance marketers see tasks pending their approval
+      query.status = { $in: ['content_approved', 'design_approved', 'development_approved'] };
+    } else {
+      // Other roles see their assigned tasks
+      if (status) query.status = status;
+    }
+
+    if (projectId) query.projectId = projectId;
+
+    const tasks = await Task.find(query)
+      .populate('projectId', 'projectName businessName industry')
+      .populate('assignedTo', 'name email role')
+      .populate('assignedBy', 'name email')
+      .sort({ dueDate: 1, createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: tasks.length,
+      data: tasks
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get tasks for current user's role
+// @route   GET /api/tasks/my-role-tasks
+// @access  Private
+exports.getMyRoleTasks = async (req, res, next) => {
+  try {
+    const { status, projectId } = req.query;
+    const userRole = req.user.role;
+
+    // Map user role to task assignedRole
+    const roleMap = {
+      'content_creator': 'content_creator',
+      'graphic_designer': 'graphic_designer',
+      'video_editor': 'video_editor',
+      'ui_ux_designer': 'ui_ux_designer',
+      'developer': 'developer',
+      'tester': 'tester',
+      'performance_marketer': 'performance_marketer'
+    };
+
+    const assignedRole = roleMap[userRole];
+    if (!assignedRole) {
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        data: []
+      });
+    }
+
+    let query = { assignedRole };
+
+    // Role-specific status filters
+    if (assignedRole === 'tester') {
+      query.status = { $in: ['content_submitted', 'design_submitted', 'development_submitted'] };
+    } else if (assignedRole === 'performance_marketer') {
+      query.status = { $in: ['content_approved', 'design_approved', 'development_approved'] };
+    } else {
+      // For creators, designers, developers - show their pending/active tasks
+      const statuses = {
+        content_creator: ['content_pending', 'content_rejected'],
+        graphic_designer: ['design_pending', 'design_rejected'],
+        video_editor: ['design_pending', 'design_rejected'],
+        ui_ux_designer: ['design_pending', 'design_rejected'],
+        developer: ['development_pending']
+      };
+      if (status) {
+        query.status = status;
+      } else if (statuses[assignedRole]) {
+        query.status = { $in: statuses[assignedRole] };
+      }
+    }
+
+    if (projectId) query.projectId = projectId;
+
+    const tasks = await Task.find(query)
+      .populate('projectId', 'projectName businessName industry')
+      .populate('assignedTo', 'name email role')
+      .populate('assignedBy', 'name email')
+      .sort({ dueDate: 1, createdAt: -1 });
+
+    // Filter out tasks where project was deleted (projectId will be null after populate)
+    const validTasks = tasks.filter(task => task.projectId !== null);
+
+    res.status(200).json({
+      success: true,
+      count: validTasks.length,
+      data: validTasks
     });
   } catch (error) {
     next(error);

@@ -103,10 +103,16 @@ export default function TasksPage() {
       if (filter.taskType) params.taskType = filter.taskType;
 
       // If projectId is specified, get tasks for that project
-      // Otherwise get tasks for the current user
-      const res = projectId
-        ? await taskService.getProjectTasks(projectId, params)
-        : await taskService.getMyTasks(params);
+      // Otherwise get tasks for the current user (by role)
+      let res;
+      if (projectId) {
+        res = await taskService.getProjectTasks(projectId, params);
+      } else {
+        // Use my-role-tasks for team members to get tasks assigned to their role
+        res = taskService.getMyRoleTasks
+          ? await taskService.getMyRoleTasks(params)
+          : await taskService.getMyTasks(params);
+      }
       setTasks(res.data);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to load tasks');

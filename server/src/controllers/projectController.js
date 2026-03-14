@@ -1,5 +1,6 @@
 const Project = require('../models/Project');
 const Notification = require('../models/Notification');
+const Task = require('../models/Task');
 const { getStageStatus, completeStage } = require('../middleware/stageGating');
 
 // Helper to emit notification (will be set from index.js)
@@ -336,19 +337,43 @@ exports.deleteProject = async (req, res, next) => {
       });
     }
 
-    // Check ownership
-    if (req.user.role !== 'admin' && project.createdBy.toString() !== req.user._id.toString()) {
+    // Only admin can delete projects
+    // Note: authorize('admin') middleware already checks this, but we keep this as a safety check
+    if (req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
-        message: 'Not authorized to delete this project'
+        message: 'Only administrators can delete projects'
       });
     }
 
+    // Delete all related data
+    // 1. Delete tasks associated with the project
+    const Task = require('../models/Task');
+    await Task.deleteMany({ projectId: project._id });
+
+    // 2. Delete strategy documents
+    const MarketResearch = require('../models/MarketResearch');
+    const Offer = require('../models/Offer');
+    const TrafficStrategy = require('../models/TrafficStrategy');
+    const CreativeStrategy = require('../models/Creative');
+    const LandingPage = require('../models/LandingPage');
+
+    await MarketResearch.deleteMany({ projectId: project._id });
+    await Offer.deleteMany({ projectId: project._id });
+    await TrafficStrategy.deleteMany({ projectId: project._id });
+    await CreativeStrategy.deleteMany({ projectId: project._id });
+    await LandingPage.deleteMany({ projectId: project._id });
+
+    // 3. Delete notifications related to this project
+    const Notification = require('../models/Notification');
+    await Notification.deleteMany({ projectId: project._id });
+
+    // 4. Delete the project itself
     await project.deleteOne();
 
     res.status(200).json({
       success: true,
-      message: 'Project deleted successfully'
+      message: 'Project and all associated data deleted successfully'
     });
   } catch (error) {
     next(error);
@@ -935,7 +960,10 @@ exports.completeLandingPageStage = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const project = await Project.findById(id);
+    const project = await Project.findById(id)
+      .populate('assignedTeam.uiUxDesigner', '_id name email')
+      .populate('assignedTeam.developer', '_id name email');
+
     if (!project) {
       return res.status(404).json({
         success: false,
@@ -953,13 +981,114 @@ exports.completeLandingPageStage = async (req, res, next) => {
       });
     }
 
+    // Landing pages are embedded in the Project document
+    const landingPages = project.landingPages || [];
+
     // Check if there are landing pages
-    if (!project.landingPages || project.landingPages.length === 0) {
+    if (landingPages.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'Add at least one landing page before completing this stage'
       });
     }
+
+    // Check if tasks already exist for this project's landing pages
+    const existingTasks = await Task.find({
+      projectId: id,
+      taskType: { $in: ['landing_page_design', 'landing_page_development'] }
+    });
+    const existingLandingPageIds = existingTasks.map(t => t.landingPageId?.toString()).filter(Boolean);
+
+    // Get strategy context for task generation
+    const MarketResearch = require('../models/MarketResearch');
+    const Offer = require('../models/Offer');
+    const TrafficStrategy = require('../models/TrafficStrategy');
+
+    const [marketResearch, offer, trafficStrategy] = await Promise.all([
+      MarketResearch.findOne({ projectId: id }),
+      Offer.findOne({ projectId: id }),
+      TrafficStrategy.findOne({ projectId: id })
+    ]);
+
+    const tasksCreated = [];
+
+    // Generate tasks for each landing page that doesn't have tasks yet
+    for (const landingPage of landingPages) {
+      // Skip if tasks already exist for this landing page
+      if (existingLandingPageIds.includes(landingPage._id.toString())) {
+        console.log(`Skipping landing page ${landingPage.name} - tasks already exist`);
+        continue;
+      }
+
+      // Build strategy context
+      const strategyContext = {
+        businessName: project.businessName || project.customerName,
+        industry: project.industry || '',
+        platform: landingPage.platform,
+        hook: landingPage.hook,
+        creativeAngle: landingPage.angle,
+        headline: landingPage.headline,
+        cta: landingPage.cta,
+        targetAudience: '',
+        painPoints: marketResearch?.painPoints || [],
+        desires: marketResearch?.desires || [],
+        offer: offer?.bonuses?.map(b => b.title).join(', ') || ''
+      };
+
+      const contextLink = `${process.env.CLIENT_URL}/projects/${id}/strategy-summary`;
+
+      // Create design task for UI/UX Designer
+      const designTask = {
+        projectId: id,
+        landingPageId: landingPage._id,
+        taskTitle: `Design: ${landingPage.name || 'Landing Page'}`,
+        taskType: 'landing_page_design',
+        assetType: 'landing_page_design',
+        assignedRole: 'ui_ux_designer',
+        assignedTo: project.assignedTeam?.uiUxDesigner?._id || null,
+        assignedBy: userId,
+        createdBy: userId,
+        status: 'design_pending',
+        strategyContext,
+        contextLink
+      };
+
+      // Create development task for Developer
+      const devTask = {
+        projectId: id,
+        landingPageId: landingPage._id,
+        taskTitle: `Develop: ${landingPage.name || 'Landing Page'}`,
+        taskType: 'landing_page_development',
+        assetType: 'landing_page_page',
+        assignedRole: 'developer',
+        assignedTo: project.assignedTeam?.developer?._id || null,
+        assignedBy: userId,
+        createdBy: userId,
+        status: 'development_pending',
+        strategyContext,
+        contextLink
+      };
+
+      const createdTasks = await Task.insertMany([designTask, devTask]);
+
+      // Send notifications for assigned users
+      for (const task of createdTasks) {
+        if (task.assignedTo) {
+          await Notification.create({
+            recipient: task.assignedTo,
+            type: 'task_assigned',
+            title: 'New Task Assigned',
+            message: `You have been assigned a new task: "${task.taskTitle}" for landing page "${landingPage.name}"`,
+            projectId: id,
+            taskId: task._id
+          });
+        }
+      }
+
+      tasksCreated.push(...createdTasks);
+    }
+
+    console.log(`Created ${tasksCreated.length} landing page tasks for project ${project.businessName || project.customerName}`);
 
     // Mark the landing page stage as complete
     project.stages.landingPage.isCompleted = true;
@@ -974,7 +1103,8 @@ exports.completeLandingPageStage = async (req, res, next) => {
       message: 'Landing page stage completed successfully',
       data: {
         ...project.toObject(),
-        stageStatus: getStageStatus(project)
+        stageStatus: getStageStatus(project),
+        tasksCreated: tasksCreated.length
       }
     });
   } catch (error) {

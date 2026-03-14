@@ -6,7 +6,6 @@ const MarketResearch = require('../models/MarketResearch');
 const Offer = require('../models/Offer');
 const TrafficStrategy = require('../models/TrafficStrategy');
 const CreativeStrategy = require('../models/Creative');
-const LandingPage = require('../models/LandingPage');
 
 // SOP References for different task types
 const SOP_REFERENCES = {
@@ -51,16 +50,15 @@ async function generateTasksFromStrategy(projectId, creativeStrategy, completedB
     }
 
     // Get strategy context from all stages
-    // IMPORTANT: Landing pages are stored in a separate LandingPage collection, not embedded in Project
-    const [marketResearch, offer, trafficStrategy, landingPagesData] = await Promise.all([
+    // Landing pages are embedded in the Project document, not in a separate collection
+    const [marketResearch, offer, trafficStrategy] = await Promise.all([
       MarketResearch.findOne({ projectId }),
       Offer.findOne({ projectId }),
-      TrafficStrategy.findOne({ projectId }),
-      LandingPage.find({ projectId, isActive: true }).sort({ order: 1 })
+      TrafficStrategy.findOne({ projectId })
     ]);
 
-    // Use landing pages from the separate collection
-    const landingPages = landingPagesData || [];
+    // Landing pages are embedded in the Project document
+    const landingPages = project.landingPages || [];
 
     // Build strategy context for AI prompts
     const strategyContext = buildStrategyContext(marketResearch, offer, trafficStrategy, creativeStrategy, project);
@@ -99,9 +97,21 @@ async function generateTasksFromStrategy(projectId, creativeStrategy, completedB
       tasks.push(...creativePlanTasks);
     }
 
-    // Generate landing page tasks for EACH landing page
-    // Landing pages are stored in a separate LandingPage collection
+    // Check for existing landing page tasks to prevent duplicates
+    const existingLandingPageTasks = await Task.find({
+      projectId,
+      taskType: { $in: ['landing_page_design', 'landing_page_development'] }
+    }).select('landingPageId');
+    const existingLandingPageIds = new Set(existingLandingPageTasks.map(t => t.landingPageId?.toString()).filter(Boolean));
+
+    // Generate landing page tasks for EACH landing page that doesn't already have tasks
+    // Landing pages are embedded in the Project document
     for (const landingPage of landingPages) {
+      // Skip if tasks already exist for this landing page
+      if (existingLandingPageIds.has(landingPage._id.toString())) {
+        console.log(`Skipping landing page ${landingPage.name || landingPage._id} - tasks already exist`);
+        continue;
+      }
       const landingPageTasks = generateLandingPageTasks(landingPage, projectId, creativeStrategy?._id || null, strategyContext, project, completedBy, contextLink, contextPdfUrl);
       tasks.push(...landingPageTasks);
     }

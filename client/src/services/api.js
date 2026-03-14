@@ -171,6 +171,8 @@ export const creativeService = {
 export const taskService = {
   // Get tasks for current user
   getMyTasks: (params) => api.get('/tasks/my-tasks', { params }),
+  // Get tasks for current user by their role
+  getMyRoleTasks: (params) => api.get('/tasks/my-role-tasks', { params }),
   // Get all tasks (admin/PM)
   getAllTasks: (params) => api.get('/tasks', { params }),
   // Get tasks for a project
@@ -199,6 +201,10 @@ export const taskService = {
   getPendingReview: () => api.get('/tasks/pending-review'),
   // Get pending marketer approval
   getPendingMarketerApproval: () => api.get('/tasks/pending-marketer-approval'),
+  // Get approved assets (tester, admin, performance_marketer)
+  getApprovedAssets: () => api.get('/tasks/approved-assets'),
+  // Get completed assets for a project
+  getProjectCompletedAssets: (projectId) => api.get(`/tasks/project/${projectId}/completed`),
   // Generate tasks from strategy
   generateTasks: (projectId) => api.post(`/tasks/generate/${projectId}`),
   // Get team members

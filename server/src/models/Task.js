@@ -53,11 +53,11 @@ const ASSET_TYPES = [
 
 // Role assignment mapping
 const ROLE_ASSIGNMENT = {
+  content_creation: 'content_creator',
   graphic_design: 'graphic_designer',
   video_editing: 'video_editor',
   landing_page_design: 'ui_ux_designer',
-  landing_page_development: 'developer',
-  content_creation: 'content_creator'
+  landing_page_development: 'developer'
 };
 
 const taskSchema = new mongoose.Schema({

@@ -150,13 +150,15 @@ exports.completeStage = async (projectId, stageKey, completedBy = null) => {
     // Generate tasks automatically when strategy is completed
     try {
       const creativeStrategy = await CreativeStrategy.findOne({ projectId });
+      // Landing pages are embedded in the Project document
       const landingPages = project.landingPages || [];
       const hasAdTypes = creativeStrategy && creativeStrategy.adTypes && creativeStrategy.adTypes.length > 0;
+      const hasCreativePlan = creativeStrategy && creativeStrategy.creativePlan && creativeStrategy.creativePlan.length > 0;
       const hasLandingPages = landingPages.length > 0;
 
-      console.log(`Task generation check: hasAdTypes=${hasAdTypes}, hasLandingPages=${hasLandingPages}`);
+      console.log(`Task generation check: hasAdTypes=${hasAdTypes}, hasCreativePlan=${hasCreativePlan}, hasLandingPages=${hasLandingPages}`);
 
-      if (hasAdTypes || hasLandingPages) {
+      if (hasAdTypes || hasCreativePlan || hasLandingPages) {
         // Use the completedBy user if provided, otherwise use project creator
         const taskCreator = completedBy || project.createdBy;
         const tasks = await generateTasksFromStrategy(projectId, creativeStrategy, taskCreator);

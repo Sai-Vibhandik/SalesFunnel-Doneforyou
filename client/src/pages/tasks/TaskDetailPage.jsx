@@ -1,12 +1,13 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 import { Card, CardBody, CardHeader, Button, Spinner, Badge } from '@/components/ui';
 import { taskService } from '@/services/api';
 import {
   ClipboardList, Play, Send, CheckCircle, XCircle, Clock,
   FileText, ExternalLink, Upload, X, FileIcon, Video, Image,
-  AlertCircle, ArrowLeft, Download, Eye, Link, MessageSquare, Layout, Code
+  AlertCircle, ArrowLeft, Download, Eye, Link, MessageSquare, Layout, Code, Palette
 } from 'lucide-react';
 
 const TASK_STATUSES = {
@@ -67,22 +68,31 @@ const CREATIVE_TYPE_LABELS = {
 export default function TaskDetailPage() {
   const { taskId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const fileInputRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [task, setTask] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectionNote, setRejectionNote] = useState('');
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
 
   // Submission form state - different fields for different task types
   const [submissionForm, setSubmissionForm] = useState({
-    // For creative tasks (graphic_design, video_editing, content_writing)
+    // For content creation tasks (content_creator)
+    contentLink: '',
+    contentFile: null,
+    contentNotes: '',
+    // For creative tasks (graphic_designer, video_editor)
     creativeLink: '',
+    creativeFile: null,
     reviewNotes: '',
-    // For landing page design
+    // For landing page design (ui_ux_designer)
     designLink: '',
+    designFile: null,
     designNotes: '',
-    // For landing page development
+    // For landing page development (developer)
     implementationUrl: '',
     repoLink: '',
     devNotes: ''
@@ -98,32 +108,49 @@ export default function TaskDetailPage() {
       const res = await taskService.getTask(taskId);
       setTask(res.data);
       // Initialize submission form with existing data based on task type
-      if (res.data.taskType === 'landing_page_design') {
+      if (res.data.taskType === 'content_creation') {
+        setSubmissionForm({
+          contentLink: res.data.contentLink || '',
+          contentNotes: res.data.contentNotes || '',
+          creativeLink: '',
+          reviewNotes: '',
+          designLink: '',
+          designNotes: '',
+          implementationUrl: '',
+          repoLink: '',
+          devNotes: ''
+        });
+      } else if (res.data.taskType === 'landing_page_design') {
         setSubmissionForm({
           designLink: res.data.designLink || '',
           designNotes: res.data.designNotes || '',
+          contentLink: '',
+          contentNotes: '',
           creativeLink: '',
           reviewNotes: '',
           implementationUrl: '',
           repoLink: '',
           devNotes: ''
         });
-        // Note: We don't reload existing designFile as it's already uploaded
-        // The user would need to re-upload if they want to change it
       } else if (res.data.taskType === 'landing_page_development') {
         setSubmissionForm({
           implementationUrl: res.data.implementationUrl || '',
           repoLink: res.data.repoLink || '',
           devNotes: res.data.devNotes || '',
+          contentLink: '',
+          contentNotes: '',
           creativeLink: '',
           reviewNotes: '',
           designLink: '',
           designNotes: ''
         });
       } else {
+        // Graphic design, video editing, and other creative tasks
         setSubmissionForm({
           creativeLink: res.data.creativeLink || '',
           reviewNotes: res.data.reviewNotes || '',
+          contentLink: '',
+          contentNotes: '',
           designLink: '',
           designNotes: '',
           implementationUrl: '',
@@ -149,14 +176,106 @@ export default function TaskDetailPage() {
     }
   };
 
+  const handleTesterApprove = async () => {
+    try {
+      await taskService.testerReview(task._id, { approved: true });
+      toast.success('Task approved successfully');
+      fetchTask();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to approve task');
+    }
+  };
+
+  const handleTesterReject = async () => {
+    if (!rejectionNote.trim()) {
+      toast.error('Please provide a reason for rejection');
+      return;
+    }
+    try {
+      await taskService.testerReview(task._id, {
+        approved: false,
+        rejectionNote: rejectionNote.trim()
+      });
+      toast.success('Task rejected with feedback');
+      setShowRejectModal(false);
+      setRejectionNote('');
+      fetchTask();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to reject task');
+    }
+  };
+
+  const handleMarketerApprove = async () => {
+    try {
+      await taskService.marketerReview(task._id, { approved: true });
+      toast.success('Task approved successfully');
+      fetchTask();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to approve task');
+    }
+  };
+
+  const handleMarketerReject = async () => {
+    if (!rejectionNote.trim()) {
+      toast.error('Please provide a reason for rejection');
+      return;
+    }
+    try {
+      await taskService.marketerReview(task._id, {
+        approved: false,
+        rejectionNote: rejectionNote.trim()
+      });
+      toast.success('Task rejected with feedback');
+      setShowRejectModal(false);
+      setRejectionNote('');
+      fetchTask();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to reject task');
+    }
+  };
+
   const handleSubmitForReview = async () => {
     try {
       setUploading(true);
 
       // Build update data based on task type
-      let updateData = { status: '', submittedAt: new Date() };
+      let updateData = { submittedAt: new Date() };
 
-      if (task.taskType === 'landing_page_design') {
+      // ============ CONTENT CREATION TASK ============
+      if (task.taskType === 'content_creation') {
+        // Validate content link
+        if (!submissionForm.contentLink.trim() && selectedFiles.length === 0) {
+          toast.error('Please provide a content link or upload a file');
+          setUploading(false);
+          return;
+        }
+
+        updateData.status = 'content_submitted';
+        updateData.contentLink = submissionForm.contentLink || null;
+        updateData.contentNotes = submissionForm.contentNotes || null;
+
+        // Upload files if any
+        if (selectedFiles.length > 0) {
+          const formData = new FormData();
+          selectedFiles.forEach(file => {
+            formData.append('files', file);
+          });
+          const uploadRes = await taskService.uploadFiles(task._id, formData);
+
+          // Get the uploaded file info and save to contentFile
+          if (uploadRes.data.outputFiles && uploadRes.data.outputFiles.length > 0) {
+            const uploadedFile = uploadRes.data.outputFiles[uploadRes.data.outputFiles.length - 1];
+            updateData.contentFile = {
+              name: uploadedFile.name,
+              path: uploadedFile.path,
+              publicId: uploadedFile.publicId,
+              uploadedAt: new Date()
+            };
+          }
+        }
+      }
+      // ============ LANDING PAGE DESIGN TASK ============
+      else if (task.taskType === 'landing_page_design') {
         // Validate design link
         if (!submissionForm.designLink.trim() && selectedFiles.length === 0) {
           toast.error('Please provide a design link or upload a design file');
@@ -187,7 +306,9 @@ export default function TaskDetailPage() {
             };
           }
         }
-      } else if (task.taskType === 'landing_page_development') {
+      }
+      // ============ LANDING PAGE DEVELOPMENT TASK ============
+      else if (task.taskType === 'landing_page_development') {
         // Validate implementation URL
         if (!submissionForm.implementationUrl.trim()) {
           toast.error('Please provide the landing page URL');
@@ -199,15 +320,17 @@ export default function TaskDetailPage() {
         updateData.implementationUrl = submissionForm.implementationUrl;
         updateData.repoLink = submissionForm.repoLink || null;
         updateData.devNotes = submissionForm.devNotes || null;
-      } else {
-        // Creative tasks - validate creative link
+      }
+      // ============ CREATIVE TASKS (Graphic Design, Video Editing) ============
+      else {
+        // Validate creative link
         if (!submissionForm.creativeLink.trim() && selectedFiles.length === 0) {
           toast.error('Please provide a creative link or upload a file');
           setUploading(false);
           return;
         }
 
-        updateData.status = 'submitted';
+        updateData.status = 'design_submitted';
         updateData.creativeLink = submissionForm.creativeLink || null;
         updateData.reviewNotes = submissionForm.reviewNotes || null;
 
@@ -228,6 +351,8 @@ export default function TaskDetailPage() {
       setShowModal(false);
       setSelectedFiles([]);
       setSubmissionForm({
+        contentLink: '',
+        contentNotes: '',
         creativeLink: '',
         reviewNotes: '',
         designLink: '',
@@ -283,6 +408,18 @@ export default function TaskDetailPage() {
     return task && ['in_progress', 'rejected'].includes(task.status);
   };
 
+  const canSubmitContent = () => {
+    // Content creator can submit from content_pending or content_rejected
+    return task && ['content_pending', 'content_rejected'].includes(task.status) &&
+           task.taskType === 'content_creation';
+  };
+
+  const canSubmitCreative = () => {
+    // Graphic designer / Video Editor can submit from design_pending or design_rejected
+    return task && ['design_pending', 'design_rejected'].includes(task.status) &&
+           ['graphic_design', 'video_editing'].includes(task.taskType);
+  };
+
   const canResubmitTask = () => {
     // For landing page tasks that have specific pending statuses after rejection
     // They can resubmit directly from design_pending or development_pending
@@ -300,6 +437,20 @@ export default function TaskDetailPage() {
   const canSubmitLandingPageDev = () => {
     return task && task.status === 'development_pending' && task.taskType === 'landing_page_development' &&
            !task.rejectionNote;
+  };
+
+  const canTesterReview = () => {
+    // Testers can review tasks in these statuses
+    const reviewableStatuses = ['content_submitted', 'design_submitted', 'development_submitted', 'submitted'];
+    return user && (user.role === 'tester' || user.role === 'admin') &&
+           task && reviewableStatuses.includes(task.status);
+  };
+
+  const canMarketerApprove = () => {
+    // Performance marketers can approve tasks in these statuses
+    const approvableStatuses = ['content_approved', 'design_approved', 'development_approved', 'approved_by_tester'];
+    return user && (user.role === 'performance_marketer' || user.role === 'admin') &&
+           task && approvableStatuses.includes(task.status);
   };
 
   if (loading) {
@@ -577,6 +728,212 @@ export default function TaskDetailPage() {
             </Card>
           )}
 
+          {/* Creative Reference - For Testers reviewing creatives */}
+          {['graphic_design', 'video_editing'].includes(task.taskType) && (task.creativeLink || task.outputFiles?.length > 0 || task.reviewNotes) && (
+            <Card>
+              <CardHeader className="bg-gradient-to-r from-pink-50 to-purple-50">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <Palette className="w-5 h-5 text-pink-600" />
+                  Submitted Creative
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  {task.taskType === 'video_editing' ? 'Video submitted by Video Editor' : 'Creative submitted by Graphic Designer'}
+                </p>
+              </CardHeader>
+              <CardBody className="p-6">
+                <div className="space-y-4">
+                  {/* Creative Link */}
+                  {task.creativeLink && (
+                    <div className="p-4 bg-pink-50 rounded-lg border border-pink-200">
+                      <h4 className="text-sm font-medium text-pink-800 mb-2 flex items-center gap-2">
+                        <Link className="w-4 h-4" />
+                        Creative Link
+                      </h4>
+                      <a
+                        href={task.creativeLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-pink-600 hover:underline flex items-center gap-1 text-sm break-all"
+                      >
+                        {task.creativeLink}
+                        <ExternalLink className="w-4 h-4 flex-shrink-0" />
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Uploaded Files */}
+                  {task.outputFiles && task.outputFiles.length > 0 && (
+                    <div className="p-4 bg-gray-50 rounded-lg border">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                        <FileIcon className="w-4 h-4" />
+                        Uploaded Files ({task.outputFiles.length})
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {task.outputFiles.map((file, index) => (
+                          <a
+                            key={index}
+                            href={file.path}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 bg-white border rounded text-sm text-blue-600 hover:bg-gray-100 flex items-center gap-1"
+                          >
+                            <Download className="w-4 h-4" />
+                            {file.name}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Review Notes */}
+                  {task.reviewNotes && (
+                    <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                      <h4 className="text-sm font-medium text-yellow-800 mb-2 flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4" />
+                        Notes from {task.taskType === 'video_editing' ? 'Video Editor' : 'Graphic Designer'}
+                      </h4>
+                      <p className="text-sm text-gray-700">{task.reviewNotes}</p>
+                    </div>
+                  )}
+                </div>
+              </CardBody>
+            </Card>
+          )}
+
+          {/* Content Reference - For Testers reviewing content */}
+          {task.taskType === 'content_creation' && (task.contentLink || task.contentFile?.path || task.contentNotes) && (
+            <Card>
+              <CardHeader className="bg-gradient-to-r from-green-50 to-blue-50">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-green-600" />
+                  Submitted Content
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Content submitted by Content Creator
+                </p>
+              </CardHeader>
+              <CardBody className="p-6">
+                <div className="space-y-4">
+                  {/* Content Link */}
+                  {task.contentLink && (
+                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                      <h4 className="text-sm font-medium text-green-800 mb-2 flex items-center gap-2">
+                        <Link className="w-4 h-4" />
+                        Content Link
+                      </h4>
+                      <a
+                        href={task.contentLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-green-600 hover:underline flex items-center gap-1 text-sm break-all"
+                      >
+                        {task.contentLink}
+                        <ExternalLink className="w-4 h-4 flex-shrink-0" />
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Content File */}
+                  {task.contentFile?.path && (
+                    <div className="p-4 bg-gray-50 rounded-lg border">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                        <FileIcon className="w-4 h-4" />
+                        Content File
+                      </h4>
+                      <a
+                        href={task.contentFile.path}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 bg-white border rounded text-sm text-blue-600 hover:bg-gray-100 flex items-center gap-1 w-fit"
+                      >
+                        <Download className="w-4 h-4" />
+                        {task.contentFile.name || 'Download Content File'}
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Content Notes */}
+                  {task.contentNotes && (
+                    <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                      <h4 className="text-sm font-medium text-yellow-800 mb-2 flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4" />
+                        Notes from Content Creator
+                      </h4>
+                      <p className="text-sm text-gray-700">{task.contentNotes}</p>
+                    </div>
+                  )}
+                </div>
+              </CardBody>
+            </Card>
+          )}
+
+          {/* Submitted Design - For Testers reviewing landing page design */}
+          {task.taskType === 'landing_page_design' && ['design_submitted', 'design_approved', 'design_rejected'].includes(task.status) && (task.designLink || task.designFile?.path || task.designNotes) && (
+            <Card>
+              <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <Layout className="w-5 h-5 text-purple-600" />
+                  Submitted Design
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Design submitted by UI/UX Designer for review
+                </p>
+              </CardHeader>
+              <CardBody className="p-6">
+                <div className="space-y-4">
+                  {/* Design Link */}
+                  {task.designLink && (
+                    <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                      <h4 className="text-sm font-medium text-purple-800 mb-2 flex items-center gap-2">
+                        <Link className="w-4 h-4" />
+                        Design Link
+                      </h4>
+                      <a
+                        href={task.designLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-purple-600 hover:underline flex items-center gap-1 text-sm break-all"
+                      >
+                        {task.designLink}
+                        <ExternalLink className="w-4 h-4 flex-shrink-0" />
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Design File */}
+                  {task.designFile?.path && (
+                    <div className="p-4 bg-gray-50 rounded-lg border">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                        <FileIcon className="w-4 h-4" />
+                        Design File
+                      </h4>
+                      <a
+                        href={task.designFile.path}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 bg-white border rounded text-sm text-blue-600 hover:bg-gray-100 flex items-center gap-1 w-fit"
+                      >
+                        <Download className="w-4 h-4" />
+                        {task.designFile.name || 'Download Design File'}
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Designer Notes */}
+                  {task.designNotes && (
+                    <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                      <h4 className="text-sm font-medium text-yellow-800 mb-2 flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4" />
+                        Notes from Designer
+                      </h4>
+                      <p className="text-sm text-gray-700">{task.designNotes}</p>
+                    </div>
+                  )}
+                </div>
+              </CardBody>
+            </Card>
+          )}
+
           {/* Design Reference - For Developers */}
           {task.taskType === 'landing_page_development' && (task.designLink || task.designFile?.path || task.designNotes) && (
             <Card>
@@ -759,6 +1116,27 @@ export default function TaskDetailPage() {
                   Start Task
                 </Button>
               )}
+              {/* Content Creator Submit Button */}
+              {canSubmitContent() && (
+                <Button
+                  className="w-full"
+                  onClick={() => setShowModal(true)}
+                >
+                  <Send className="w-4 h-4 mr-2" />
+                  Submit Content
+                </Button>
+              )}
+              {/* Creative/Grammar Designer Submit Button */}
+              {canSubmitCreative() && (
+                <Button
+                  className="w-full"
+                  onClick={() => setShowModal(true)}
+                >
+                  <Send className="w-4 h-4 mr-2" />
+                  Submit Creative
+                </Button>
+              )}
+              {/* Landing Page Design/Development Submit Button */}
               {(canSubmitTask() || canResubmitTask() || canSubmitLandingPage() || canSubmitLandingPageDev()) && (
                 <Button
                   className="w-full"
@@ -767,6 +1145,84 @@ export default function TaskDetailPage() {
                   <Send className="w-4 h-4 mr-2" />
                   {canResubmitTask() ? 'Resubmit for Review' : 'Submit for Review'}
                 </Button>
+              )}
+
+              {/* Tester Review Actions */}
+              {canTesterReview() && (
+                <div className="space-y-3 pt-3 border-t">
+                  <h4 className="font-medium text-gray-900">Tester Review</h4>
+                  <p className="text-sm text-gray-500">
+                    Review the submitted work and approve or reject.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      className="flex-1"
+                      variant="success"
+                      onClick={handleTesterApprove}
+                    >
+                      <CheckCircle className="w-4 h-4 mr-1" />
+                      Approve
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      variant="danger"
+                      onClick={() => setShowRejectModal(true)}
+                    >
+                      <XCircle className="w-4 h-4 mr-1" />
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Marketer Approval Actions */}
+              {canMarketerApprove() && (
+                <div className="space-y-3 pt-3 border-t">
+                  <h4 className="font-medium text-gray-900">Marketer Review</h4>
+                  <p className="text-sm text-gray-500">
+                    Final approval required before task completion.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      className="flex-1"
+                      variant="success"
+                      onClick={handleMarketerApprove}
+                    >
+                      <CheckCircle className="w-4 h-4 mr-1" />
+                      Approve
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      variant="danger"
+                      onClick={() => setShowRejectModal(true)}
+                    >
+                      <XCircle className="w-4 h-4 mr-1" />
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Status Messages */}
+              {task.status === 'content_submitted' && (
+                <div className="text-center text-sm text-gray-500 py-4">
+                  <Eye className="w-5 h-5 mx-auto mb-2 text-yellow-500" />
+                  Content is pending tester review
+                </div>
+              )}
+              {task.status === 'content_approved' && (
+                <div className="text-center text-sm text-gray-500 py-4">
+                  <CheckCircle className="w-5 h-5 mx-auto mb-2 text-purple-500" />
+                  Content approved, awaiting marketer review
+                </div>
+              )}
+              {task.status === 'content_rejected' && task.rejectionNote && (
+                <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                  <p className="text-sm text-red-800">
+                    <AlertCircle className="w-4 h-4 inline mr-1" />
+                    Content rejected. Please revise and resubmit.
+                  </p>
+                </div>
               )}
               {task.status === 'submitted' && (
                 <div className="text-center text-sm text-gray-500 py-4">
@@ -839,8 +1295,11 @@ export default function TaskDetailPage() {
           <div className="bg-white rounded-lg p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-gray-900">
-                {task.taskType === 'landing_page_design' ? 'Submit Design for Review' :
+                {task.taskType === 'content_creation' ? 'Submit Content for Review' :
+                 task.taskType === 'landing_page_design' ? 'Submit Design for Review' :
                  task.taskType === 'landing_page_development' ? 'Submit Implementation for Review' :
+                 task.taskType === 'graphic_design' ? 'Submit Creative for Review' :
+                 task.taskType === 'video_editing' ? 'Submit Video for Review' :
                  'Submit Work for Review'}
               </h2>
               <button
@@ -852,6 +1311,91 @@ export default function TaskDetailPage() {
             </div>
 
             <div className="space-y-5">
+              {/* ============ CONTENT CREATION (Content Creator) ============ */}
+              {task.taskType === 'content_creation' && (
+                <>
+                  {/* Content Link - Required */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Content Link <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Link className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="url"
+                        value={submissionForm.contentLink}
+                        onChange={(e) => setSubmissionForm({ ...submissionForm, contentLink: e.target.value })}
+                        placeholder="https://docs.google.com/... or https://drive.google.com/..."
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Share a link to your content (Google Docs, Drive, Figma, etc.)
+                    </p>
+                  </div>
+
+                  {/* Content File Upload - Optional */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Upload Content File <span className="text-gray-400">(optional)</span>
+                    </label>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      accept="image/*,video/*,.pdf,.doc,.docx,.txt,.zip"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                      id="content-file-upload"
+                    />
+                    <label
+                      htmlFor="content-file-upload"
+                      className="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary-400 transition-colors text-center cursor-pointer block"
+                    >
+                      <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                      <p className="text-sm text-gray-600">Click to upload content files</p>
+                      <p className="text-xs text-gray-400 mt-1">Documents, Images, Videos (Max 100MB)</p>
+                    </label>
+
+                    {selectedFiles.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {selectedFiles.map((file, index) => (
+                          <div key={index} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg border">
+                            <div className="flex items-center gap-2 overflow-hidden">
+                              <FileIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                              <div className="overflow-hidden">
+                                <p className="text-sm font-medium truncate">{file.name}</p>
+                                <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+                              </div>
+                            </div>
+                            <button type="button" onClick={() => handleRemoveFile(index)} className="p-1 hover:bg-gray-200 rounded">
+                              <X className="w-4 h-4 text-gray-500" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Content Notes */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Content Notes
+                    </label>
+                    <div className="relative">
+                      <MessageSquare className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                      <textarea
+                        value={submissionForm.contentNotes}
+                        onChange={(e) => setSubmissionForm({ ...submissionForm, contentNotes: e.target.value })}
+                        placeholder="Add notes about your content for the tester..."
+                        rows={4}
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
               {/* ============ LANDING PAGE DESIGN (UI/UX Designer) ============ */}
               {task.taskType === 'landing_page_design' && (
                 <>
@@ -1133,6 +1677,38 @@ export default function TaskDetailPage() {
               <Button onClick={handleSubmitForReview} loading={uploading} disabled={uploading}>
                 <Send className="w-4 h-4 mr-1" />
                 Submit for Review
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rejection Modal */}
+      {showRejectModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Reject Task</h3>
+            <p className="text-gray-600 mb-4">
+              Please provide a reason for rejecting this task. This feedback will be shared with the assigned team member.
+            </p>
+            <textarea
+              value={rejectionNote}
+              onChange={(e) => setRejectionNote(e.target.value)}
+              placeholder="Enter rejection reason..."
+              rows={4}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+              autoFocus
+            />
+            <div className="flex justify-end gap-3 mt-4">
+              <Button variant="secondary" onClick={() => {
+                setShowRejectModal(false);
+                setRejectionNote('');
+              }}>
+                Cancel
+              </Button>
+              <Button variant="danger" onClick={canTesterReview() ? handleTesterReject : handleMarketerReject}>
+                <XCircle className="w-4 h-4 mr-1" />
+                Reject Task
               </Button>
             </div>
           </div>

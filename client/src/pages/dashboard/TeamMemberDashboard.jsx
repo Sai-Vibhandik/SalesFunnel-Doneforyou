@@ -23,6 +23,13 @@ import {
 import { formatDate } from '@/lib/utils';
 
 const ROLE_CONFIG = {
+  content_creator: {
+    icon: FileText,
+    color: 'blue',
+    title: 'Content Creator Dashboard',
+    taskTypes: ['content_creation', 'content_writing'],
+    actions: ['view_tasks', 'submit_content']
+  },
   ui_ux_designer: {
     icon: Palette,
     color: 'purple',
@@ -36,6 +43,13 @@ const ROLE_CONFIG = {
     title: 'Designer Dashboard',
     taskTypes: ['graphic_design', 'video_editing', 'content_writing'],
     actions: ['view_tasks', 'upload_creative']
+  },
+  video_editor: {
+    icon: FileText,
+    color: 'indigo',
+    title: 'Video Editor Dashboard',
+    taskTypes: ['video_editing'],
+    actions: ['view_tasks', 'upload_video']
   },
   developer: {
     icon: Code,
@@ -60,9 +74,17 @@ const STATUS_CONFIG = {
   approved_by_tester: { label: 'Tester Approved', color: 'bg-purple-100 text-purple-800' },
   final_approved: { label: 'Completed', color: 'bg-green-100 text-green-800' },
   rejected: { label: 'Rejected', color: 'bg-red-100 text-red-800' },
+  // Content workflow
+  content_pending: { label: 'Content Pending', color: 'bg-orange-100 text-orange-800' },
+  content_submitted: { label: 'Content Review', color: 'bg-yellow-100 text-yellow-800' },
+  content_approved: { label: 'Content Approved', color: 'bg-purple-100 text-purple-800' },
+  content_rejected: { label: 'Content Rejected', color: 'bg-red-100 text-red-800' },
+  // Design workflow
   design_pending: { label: 'Design Pending', color: 'bg-orange-100 text-orange-800' },
   design_submitted: { label: 'Design Review', color: 'bg-yellow-100 text-yellow-800' },
   design_approved: { label: 'Design Approved', color: 'bg-purple-100 text-purple-800' },
+  design_rejected: { label: 'Design Rejected', color: 'bg-red-100 text-red-800' },
+  // Development workflow
   development_pending: { label: 'Dev Pending', color: 'bg-orange-100 text-orange-800' },
   development_submitted: { label: 'Dev Review', color: 'bg-yellow-100 text-yellow-800' },
   development_approved: { label: 'Dev Approved', color: 'bg-purple-100 text-purple-800' }
@@ -94,37 +116,43 @@ export default function TeamMemberDashboard({ user }) {
     try {
       setLoading(true);
 
-      // Fetch projects and tasks in parallel
-      const [projectsRes, tasksRes] = await Promise.all([
-        projectService.getProjects({ limit: 50 }),
-        taskService.getMyTasks()
-      ]);
-
+      // Fetch projects
+      const projectsRes = await projectService.getProjects({ limit: 50 });
       const assignedProjects = projectsRes.data || [];
-      const assignedTasks = tasksRes.data || [];
-
       setProjects(assignedProjects);
-      setTasks(assignedTasks);
 
-      // If tester, also fetch pending review tasks
+      // Fetch tasks based on role
+      let assignedTasks = [];
+      let reviewTasks = [];
+
       if (isTester) {
-        try {
-          const reviewRes = await taskService.getPendingReview();
-          setPendingReview(reviewRes.data || []);
-        } catch (err) {
-          console.log('Could not fetch pending review tasks');
-        }
+        // Testers need both pending review tasks and their assigned tasks
+        const [reviewRes, myTasksRes] = await Promise.all([
+          taskService.getPendingReview(),
+          taskService.getMyRoleTasks ? taskService.getMyRoleTasks() : taskService.getMyTasks()
+        ]);
+        reviewTasks = reviewRes.data || [];
+        assignedTasks = myTasksRes.data || [];
+        setPendingReview(reviewTasks);
+      } else {
+        // Other team members: use my-role-tasks to get tasks by assignedRole
+        const tasksRes = taskService.getMyRoleTasks
+          ? await taskService.getMyRoleTasks()
+          : await taskService.getMyTasks();
+        assignedTasks = tasksRes.data || [];
       }
+
+      setTasks(assignedTasks);
 
       // Calculate stats
       const total = assignedProjects.length;
       const active = assignedProjects.filter(p => p.isActive && p.status === 'active').length;
       const completed = assignedProjects.filter(p => p.status === 'completed').length;
       const pendingTasks = assignedTasks.filter(t =>
-        ['todo', 'design_pending', 'development_pending'].includes(t.status)
+        ['todo', 'design_pending', 'development_pending', 'content_pending'].includes(t.status)
       ).length;
       const inProgressTasks = assignedTasks.filter(t =>
-        ['in_progress', 'submitted', 'design_submitted', 'development_submitted'].includes(t.status)
+        ['in_progress', 'submitted', 'design_submitted', 'development_submitted', 'content_submitted'].includes(t.status)
       ).length;
 
       setStats({ total, active, completed, pendingTasks, inProgressTasks });

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { projectService } from '@/services/api';
+import { projectService, taskService } from '@/services/api';
 import { Card, CardBody, Button, Badge, ProgressBar, Spinner } from '@/components/ui';
 import {
   FolderKanban,
@@ -15,6 +15,8 @@ import {
   Play,
   ChevronRight,
   AlertCircle,
+  FileCheck,
+  Eye,
 } from 'lucide-react';
 import { formatDate, getStageName } from '@/lib/utils';
 
@@ -47,11 +49,13 @@ export default function PerformanceMarketerDashboard({ user }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [projects, setProjects] = useState([]);
+  const [projectAssets, setProjectAssets] = useState({});
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
     completed: 0,
     inProgress: 0,
+    totalCompletedAssets: 0,
   });
 
   useEffect(() => {
@@ -84,7 +88,32 @@ export default function PerformanceMarketerDashboard({ user }) {
 
       console.log('Stats:', { total, active, completed, inProgress });
 
-      setStats({ total, active, completed, inProgress });
+      setStats({ total, active, completed, inProgress, totalCompletedAssets: 0 });
+
+      // Fetch completed assets count for each project
+      const assetsPromises = assignedProjects.map(async (project) => {
+        try {
+          const assetsRes = await taskService.getProjectCompletedAssets(project._id);
+          return { projectId: project._id, count: assetsRes.data?.count || 0 };
+        } catch (err) {
+          console.error(`Failed to fetch assets for project ${project._id}:`, err);
+          return { projectId: project._id, count: 0 };
+        }
+      });
+
+      const assetsResults = await Promise.all(assetsPromises);
+      const assetsMap = {};
+      let totalCompletedAssets = 0;
+
+      assetsResults.forEach(result => {
+        const count = Number(result.count) || 0;
+        assetsMap[result.projectId] = count;
+        totalCompletedAssets += count;
+      });
+
+      setProjectAssets(assetsMap);
+      setStats(prev => ({ ...prev, totalCompletedAssets }));
+
     } catch (err) {
       console.error('Failed to load projects:', err);
       setError(err.response?.data?.message || 'Failed to load projects');
@@ -182,7 +211,7 @@ export default function PerformanceMarketerDashboard({ user }) {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
           <CardBody className="p-4">
             <div className="flex items-center justify-between">
@@ -234,6 +263,23 @@ export default function PerformanceMarketerDashboard({ user }) {
               </div>
               <div className="p-3 bg-purple-100 rounded-lg">
                 <CheckCircle className="w-6 h-6 text-purple-600" />
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+
+        <Card
+          className="cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => navigate('/tasks/approved')}
+        >
+          <CardBody className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500">Completed Assets</p>
+                <p className="text-2xl font-bold text-teal-600">{stats.totalCompletedAssets || 0}</p>
+              </div>
+              <div className="p-3 bg-teal-100 rounded-lg">
+                <FileCheck className="w-6 h-6 text-teal-600" />
               </div>
             </div>
           </CardBody>
@@ -352,18 +398,51 @@ export default function PerformanceMarketerDashboard({ user }) {
                           </div>
                         )}
 
+                        {/* Completed Assets */}
+                        {(projectAssets[project._id] || 0) > 0 && (
+                          <div className="mt-3 flex items-center justify-between p-3 bg-teal-50 rounded-lg">
+                            <div className="flex items-center gap-2">
+                              <FileCheck className="w-5 h-5 text-teal-600" />
+                              <span className="text-sm text-teal-800">
+                                <span className="font-medium">{projectAssets[project._id] || 0}</span> completed assets
+                              </span>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/projects/${project._id}/assets`);
+                              }}
+                            >
+                              <Eye className="w-4 h-4 mr-1" />
+                              View
+                            </Button>
+                          </div>
+                        )}
+
                         {/* Last Updated */}
                         <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between text-sm">
                           <span className="text-gray-500">
                             Last updated: {formatDate(project.updatedAt)}
                           </span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => navigate(`/projects/${project._id}`)}
-                          >
-                            View Details
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => navigate(`/projects/${project._id}/assets`)}
+                            >
+                              <FileCheck className="w-4 h-4 mr-1" />
+                              Assets
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => navigate(`/projects/${project._id}`)}
+                            >
+                              Details
+                            </Button>
+                          </div>
                         </div>
                       </CardBody>
                     </Card>

@@ -17,9 +17,12 @@ const TASK_TYPES = {
 };
 
 const STATUS_LABELS = {
-  approved_by_tester: 'Awaiting Marketer Review',
-  development_approved: 'Awaiting Marketer Review',
-  final_approved: 'Fully Approved',
+  approved_by_tester: { label: 'Awaiting Marketer Review', color: 'bg-blue-100 text-blue-800' },
+  content_approved: { label: 'Awaiting Marketer Review', color: 'bg-blue-100 text-blue-800' },
+  design_approved: { label: 'Awaiting Marketer Review', color: 'bg-blue-100 text-blue-800' },
+  development_approved: { label: 'Awaiting Marketer Review', color: 'bg-blue-100 text-blue-800' },
+  final_approved: { label: 'Fully Approved', color: 'bg-green-100 text-green-800' },
+  content_final_approved: { label: 'Fully Approved', color: 'bg-green-100 text-green-800' },
 };
 
 export default function ApprovedAssetsPage() {
@@ -35,13 +38,9 @@ export default function ApprovedAssetsPage() {
   const fetchApprovedTasks = async () => {
     try {
       setLoading(true);
-      // Fetch tasks that have been approved by tester or are fully approved
-      const res = await taskService.getAllTasks();
-      // Filter for tasks approved by tester or final approved
-      const approvedTasks = res.data.filter(task =>
-        ['approved_by_tester', 'development_approved', 'final_approved'].includes(task.status)
-      );
-      setTasks(approvedTasks);
+      // Fetch approved assets using the dedicated endpoint
+      const res = await taskService.getApprovedAssets();
+      setTasks(res.data);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to load approved assets');
     } finally {
@@ -61,11 +60,10 @@ export default function ApprovedAssetsPage() {
   };
 
   const getStatusBadge = (status) => {
-    const config = STATUS_LABELS[status] || { label: status, color: 'bg-gray-100 text-gray-800' };
-    const isFinalApproved = status === 'final_approved';
+    const config = STATUS_LABELS[status] || { label: status.replace(/_/g, ' '), color: 'bg-gray-100 text-gray-800' };
     return (
-      <span className={`px-2 py-1 text-xs rounded-full ${isFinalApproved ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
-        {config}
+      <span className={`px-2 py-1 text-xs rounded-full ${config.color}`}>
+        {config.label}
       </span>
     );
   };

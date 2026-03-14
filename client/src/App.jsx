@@ -14,6 +14,7 @@ import { DashboardPage } from '@/pages/dashboard';
 
 // Projects
 import { ProjectsListPage, CreateProjectPage, ProjectDetailPage, TeamAssignmentPage } from '@/pages/projects';
+import ProjectAssetsPage from '@/pages/projects/ProjectAssetsPage';
 
 // Stages
 import {
@@ -188,6 +189,7 @@ function AppRoutes() {
         {/* Projects */}
         <Route path="/projects" element={<ProjectsListPage />} />
         <Route path="/projects/:id" element={<ProjectDetailPage />} />
+        <Route path="/projects/:id/assets" element={<ProjectAssetsPage />} />
 
         {/* Create Project - Admin only */}
         <Route

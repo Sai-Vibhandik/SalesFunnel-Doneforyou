@@ -7,6 +7,7 @@ const {
   getAllTasks,
   getTask,
   getProjectTasks,
+  getProjectCompletedAssets,
   createTask,
   updateTask,
   assignTask,
@@ -15,9 +16,12 @@ const {
   uploadFiles,
   getPendingReviewTasks,
   getPendingMarketerApproval,
+  getApprovedAssets,
   generateTasks,
   updateTaskContent,
-  getTeamMembers
+  getTeamMembers,
+  getTasksByRole,
+  getMyRoleTasks
 } = require('../controllers/taskController');
 
 // All routes require authentication
@@ -30,11 +34,20 @@ router.use(protect);
 // Get tasks for current user
 router.get('/my-tasks', getMyTasks);
 
+// Get tasks for current user by their role
+router.get('/my-role-tasks', getMyRoleTasks);
+
 // Get team members for assignment
 router.get('/team-members', getTeamMembers);
 
+// Get tasks by role (for dashboard)
+router.get('/by-role/:role', getTasksByRole);
+
 // Get tasks pending tester review (Testers/Admin only)
 router.get('/pending-review', authorize('tester', 'admin'), getPendingReviewTasks);
+
+// Get approved assets (Testers/Admin/Performance Marketer)
+router.get('/approved-assets', authorize('tester', 'admin', 'performance_marketer'), getApprovedAssets);
 
 // Get tasks pending marketer approval (Performance Marketers/Admin only)
 router.get('/pending-marketer-approval', authorize('performance_marketer', 'admin'), getPendingMarketerApproval);
@@ -44,6 +57,9 @@ router.get('/', authorize('admin', 'performance_marketer'), getAllTasks);
 
 // Get tasks for a specific project
 router.get('/project/:projectId', getProjectTasks);
+
+// Get completed assets for a specific project
+router.get('/project/:projectId/completed', getProjectCompletedAssets);
 
 // Generate tasks from strategy (Admin only)
 router.post('/generate/:projectId', authorize('admin'), generateTasks);
