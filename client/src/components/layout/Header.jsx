@@ -19,8 +19,10 @@ export default function Header() {
     performance_marketer: 'Performance Marketer',
     ui_ux_designer: 'UI/UX Designer',
     graphic_designer: 'Graphic Designer',
+    video_editor: 'Video Editor',
     developer: 'Developer',
     tester: 'Tester',
+    content_creator: 'Content Creator',
   };
 
   // Get notification icon based on type

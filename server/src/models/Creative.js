@@ -1,6 +1,143 @@
 const mongoose = require('mongoose');
 
-// Creative details for each ad type
+// Creative Categories
+const CREATIVE_CATEGORIES = [
+  'IMAGE',
+  'VIDEO',
+  'CAROUSEL',
+  'UGC',
+  'TESTIMONIAL',
+  'DEMO_EXPLAINER',
+  'OFFER_SALES'
+];
+
+// Creative Types per Category
+const CREATIVE_TYPES = {
+  IMAGE: [
+    'Problem Image',
+    'Solution Image',
+    'Offer Image',
+    'Discount Image',
+    'Limited Time Offer Image',
+    'Before – After Image',
+    'Comparison Image',
+    'Feature Highlight Image',
+    'Benefit Image',
+    'Statistic / Data Image',
+    'Question Hook Image',
+    'Bold Statement Image',
+    'Testimonial Screenshot Image',
+    'Review Image',
+    'Result Proof Image',
+    'Authority Quote Image',
+    'Meme Image',
+    'Relatable Situation Image',
+    'Urgency Image',
+    'CTA Focus Image'
+  ],
+  VIDEO: [
+    'Problem Hook Video',
+    'Storytelling Video',
+    'Product Demo Video',
+    'Service Demo Video',
+    'Explainer Video',
+    'Educational Tip Video',
+    'Myth vs Reality Video',
+    'Offer Announcement Video',
+    'Urgency Video',
+    'Behind The Scenes Video',
+    'Founder Message Video',
+    'FAQ Video',
+    'Case Study Video',
+    'Testimonial Video',
+    'Comparison Video',
+    'How It Works Video',
+    'Objection Handling Video',
+    'Trend Reel Video',
+    'Screen Recording Video',
+    'Sales Pitch Video'
+  ],
+  CAROUSEL: [
+    'Feature Carousel',
+    'Benefit Carousel',
+    'Step by Step Carousel',
+    'Before After Carousel',
+    'Testimonial Carousel',
+    'Case Study Carousel',
+    'Product Showcase Carousel',
+    'Offer Breakdown Carousel'
+  ],
+  UGC: [
+    'Selfie Review Video',
+    'Customer Experience Video',
+    'Reaction Video',
+    'Unboxing Video',
+    'Day in Life Video',
+    'Real Life Story Video'
+  ],
+  TESTIMONIAL: [
+    'Video Testimonial',
+    'Screenshot Review',
+    'Google Review Image',
+    'Client Success Story',
+    'Result Dashboard Proof'
+  ],
+  DEMO_EXPLAINER: [
+    'Screen Recording Demo',
+    'Product Usage Demo',
+    'Service Process Demo',
+    'Tutorial Video',
+    'Walkthrough Video'
+  ],
+  OFFER_SALES: [
+    'Launch Offer',
+    'Limited Time Offer',
+    'Discount Offer',
+    'Festive Offer',
+    'Bonus Offer',
+    'Last Chance Offer',
+    'Price Breakdown Creative',
+    'Guarantee Creative'
+  ]
+};
+
+// Assigned Roles for Creative Production
+const CREATIVE_ROLES = [
+  'graphic_designer',
+  'video_editor'
+];
+
+// Creative Plan Item - Individual creative row
+const creativePlanItemSchema = new mongoose.Schema({
+  category: {
+    type: String,
+    enum: CREATIVE_CATEGORIES,
+    required: true
+  },
+  creativeType: {
+    type: String,
+    required: true
+  },
+  assignedRole: {
+    type: String,
+    enum: CREATIVE_ROLES,
+    required: true
+  },
+  notes: {
+    type: String,
+    trim: true
+  },
+  platforms: [{
+    type: String,
+    enum: ['facebook', 'instagram', 'youtube', 'google', 'linkedin', 'tiktok', 'twitter', 'whatsapp']
+  }],
+  order: {
+    type: Number,
+    default: 0
+  }
+}, { _id: true });
+
+// Creative details for each ad type (legacy)
 const adCreativeDetailsSchema = new mongoose.Schema({
   // Number of creatives
   imageCreatives: {
@@ -167,7 +304,21 @@ const creativeStrategySchema = new mongoose.Schema({
     required: true,
     unique: true
   },
-  // New flexible ad types system
+  // NEW: Creative Plan - structured creative planning
+  creativePlan: [creativePlanItemSchema],
+  // Selected creative categories with quantities
+  creativeCategories: [{
+    category: {
+      type: String,
+      enum: CREATIVE_CATEGORIES
+    },
+    quantity: {
+      type: Number,
+      default: 0,
+      min: 0
+    }
+  }],
+  // Legacy: Ad types system
   adTypes: [adTypeSchema],
   // Additional notes from performance marketer
   additionalNotes: {
@@ -210,23 +361,36 @@ const creativeStrategySchema = new mongoose.Schema({
 creativeStrategySchema.methods.calculateTotal = function() {
   let total = 0;
 
-  // From new adTypes system
+  // From new creativePlan system
+  if (this.creativePlan && this.creativePlan.length > 0) {
+    total = this.creativePlan.length;
+  }
+
+  // From creativeCategories (quantity sum)
+  if (this.creativeCategories && this.creativeCategories.length > 0) {
+    total = Math.max(total, this.creativeCategories.reduce((sum, cat) => sum + (cat.quantity || 0), 0));
+  }
+
+  // From legacy adTypes system
   if (this.adTypes && this.adTypes.length > 0) {
-    this.adTypes.forEach(adType => {
+    const adTypesTotal = this.adTypes.reduce((sum, adType) => {
       if (adType.creatives) {
-        total += (adType.creatives.imageCreatives || 0) +
-                 (adType.creatives.videoCreatives || 0) +
-                 (adType.creatives.carouselCreatives || 0);
+        return sum + (adType.creatives.imageCreatives || 0) +
+                     (adType.creatives.videoCreatives || 0) +
+                     (adType.creatives.carouselCreatives || 0);
       }
-    });
+      return sum;
+    }, 0);
+    total = Math.max(total, adTypesTotal);
   }
 
   // From legacy stages system
   if (this.stages && this.stages.length > 0) {
-    this.stages.forEach(stage => {
+    const stagesTotal = this.stages.reduce((sum, stage) => {
       stage.totalCreatives = stage.creatives?.length || 0;
-      total += stage.totalCreatives;
-    });
+      return sum + stage.totalCreatives;
+    }, 0);
+    total = Math.max(total, stagesTotal);
   }
 
   this.totalCreatives = total;
@@ -238,28 +402,50 @@ creativeStrategySchema.methods.calculateCompletion = function() {
   let completedItems = 0;
   const totalItems = 3;
 
-  // Check if at least one ad type exists
-  if (this.adTypes && this.adTypes.length > 0) {
+  // Check if creativePlan has items
+  if (this.creativePlan && this.creativePlan.length > 0) {
     completedItems++;
-  } else if (this.stages && this.stages.some(s => s.creatives && s.creatives.length > 0)) {
+  }
+  // Check if creativeCategories has quantities
+  else if (this.creativeCategories && this.creativeCategories.some(c => c.quantity > 0)) {
+    completedItems++;
+  }
+  // Check legacy adTypes
+  else if (this.adTypes && this.adTypes.length > 0) {
+    completedItems++;
+  }
+  // Check legacy stages
+  else if (this.stages && this.stages.some(s => s.creatives && s.creatives.length > 0)) {
     completedItems++;
   }
 
   // Check if creative brief or additional notes exist
   if (this.creativeBrief || this.additionalNotes) completedItems++;
 
-  // Check if at least one creative has configuration
-  const hasConfiguration = (this.adTypes && this.adTypes.some(at =>
+  // Check if creative plan has assigned roles
+  if (this.creativePlan && this.creativePlan.some(item => item.assignedRole)) {
+    completedItems++;
+  }
+  // Check legacy configuration
+  else if (this.adTypes && this.adTypes.some(at =>
     at.creatives && (
       (at.creatives.imageCreatives > 0) ||
       (at.creatives.videoCreatives > 0) ||
       (at.creatives.carouselCreatives > 0)
     )
-  )) || (this.stages && this.stages.some(s => s.creatives && s.creatives.some(c => c.assignedDesigner)));
-
-  if (hasConfiguration) completedItems++;
+  )) {
+    completedItems++;
+  }
+  else if (this.stages && this.stages.some(s => s.creatives && s.creatives.some(c => c.assignedDesigner))) {
+    completedItems++;
+  }
 
   return Math.round((completedItems / totalItems) * 100);
 };
+
+// Export constants for use in frontend
+module.exports.CREATIVE_CATEGORIES = CREATIVE_CATEGORIES;
+module.exports.CREATIVE_TYPES = CREATIVE_TYPES;
+module.exports.CREATIVE_ROLES = CREATIVE_ROLES;
 
 module.exports = mongoose.model('CreativeStrategy', creativeStrategySchema);

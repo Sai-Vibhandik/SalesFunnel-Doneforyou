@@ -27,6 +27,7 @@ const roleLabels = {
   content_creator: 'Content Creator',
   ui_ux_designer: 'UI/UX Designer',
   graphic_designer: 'Designer',
+  video_editor: 'Video Editor',
   developer: 'Developer',
   tester: 'Tester',
 };
@@ -59,6 +60,13 @@ const navigationByRole = {
 
   // GRAPHIC DESIGNER SIDEBAR
   graphic_designer: [
+    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { name: 'My Projects', href: '/projects', icon: FolderKanban },
+    { name: 'My Tasks', href: '/tasks', icon: CheckSquare },
+  ],
+
+  // VIDEO EDITOR SIDEBAR
+  video_editor: [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'My Projects', href: '/projects', icon: FolderKanban },
     { name: 'My Tasks', href: '/tasks', icon: CheckSquare },

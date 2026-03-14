@@ -117,7 +117,11 @@ exports.getLandingPage = async (req, res, next) => {
 exports.createLandingPage = async (req, res, next) => {
   try {
     const { projectId } = req.params;
-    const { name, type, hook, angle, platform, leadCapture, nurturing, headline, subheadline, ctaText, designPreferences, seoSettings, offer } = req.body;
+    const {
+      name, type, funnelType, hook, angle, platform, cta, offer, messaging,
+      leadCaptureMethod, leadCapture, nurturing, headline, subheadline,
+      designPreferences, seoSettings
+    } = req.body;
 
     const { project, error } = await checkProjectAccess(projectId, req.user);
     if (error) {
@@ -142,18 +146,23 @@ exports.createLandingPage = async (req, res, next) => {
       projectId,
       name: name || `Landing Page ${count + 1}`,
       order: count,
-      type: type || 'video_sales_letter',
+      // Support both field names for backward compatibility
+      funnelType: funnelType || type || 'video_sales_letter',
+      type: type || funnelType || 'video_sales_letter',
       hook: hook || '',
       angle: angle || '',
       platform: platform || 'facebook',
-      leadCapture: leadCapture || {},
+      cta: cta || '',
+      ctaText: cta || '', // Sync ctaText for backward compatibility
+      offer: offer || '',
+      messaging: messaging || '',
+      leadCaptureMethod: leadCaptureMethod || 'form',
+      leadCapture: leadCapture || { method: leadCaptureMethod || 'form' },
       nurturing: nurturing || [],
       headline: headline || '',
       subheadline: subheadline || '',
-      ctaText: ctaText || '',
       designPreferences: designPreferences || {},
       seoSettings: seoSettings || {},
-      offer: offer || {},
       createdBy: req.user._id
     });
 
@@ -207,9 +216,9 @@ exports.updateLandingPage = async (req, res, next) => {
 
     // Update fields
     const updatableFields = [
-      'name', 'type', 'hook', 'angle', 'platform', 'leadCapture',
-      'nurturing', 'headline', 'subheadline', 'ctaText',
-      'designPreferences', 'seoSettings', 'offer'
+      'name', 'type', 'funnelType', 'hook', 'angle', 'platform', 'cta', 'offer', 'messaging',
+      'leadCaptureMethod', 'leadCapture', 'nurturing', 'headline', 'subheadline',
+      'designPreferences', 'seoSettings'
     ];
 
     updatableFields.forEach(field => {
@@ -217,6 +226,19 @@ exports.updateLandingPage = async (req, res, next) => {
         landingPage[field] = req.body[field];
       }
     });
+
+    // Sync ctaText for backward compatibility
+    if (req.body.cta !== undefined) {
+      landingPage.ctaText = req.body.cta;
+    }
+
+    // Sync funnelType/type for backward compatibility
+    if (req.body.funnelType !== undefined) {
+      landingPage.type = req.body.funnelType;
+    }
+    if (req.body.type !== undefined) {
+      landingPage.funnelType = req.body.type;
+    }
 
     await landingPage.save();
 

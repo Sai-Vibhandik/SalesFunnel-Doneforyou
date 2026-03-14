@@ -27,6 +27,7 @@ const ROLE_OPTIONS = [
   { value: 'content_creator', label: 'Content Creator' },
   { value: 'ui_ux_designer', label: 'UI/UX Designer' },
   { value: 'graphic_designer', label: 'Graphic Designer' },
+  { value: 'video_editor', label: 'Video Editor' },
   { value: 'developer', label: 'Developer' },
   { value: 'tester', label: 'Tester' },
 ];
@@ -45,6 +46,7 @@ function TeamMemberRow({ member, onEdit, onDelete }) {
     content_creator: 'Content Creator',
     ui_ux_designer: 'UI/UX Designer',
     graphic_designer: 'Graphic Designer',
+    video_editor: 'Video Editor',
     developer: 'Developer',
     tester: 'Tester',
   };
@@ -55,6 +57,7 @@ function TeamMemberRow({ member, onEdit, onDelete }) {
     content_creator: 'bg-indigo-100 text-indigo-700',
     ui_ux_designer: 'bg-purple-100 text-purple-700',
     graphic_designer: 'bg-pink-100 text-pink-700',
+    video_editor: 'bg-cyan-100 text-cyan-700',
     developer: 'bg-green-100 text-green-700',
     tester: 'bg-orange-100 text-orange-700',
   };

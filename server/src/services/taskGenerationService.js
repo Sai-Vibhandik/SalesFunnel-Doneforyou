@@ -42,6 +42,7 @@ async function generateTasksFromStrategy(projectId, creativeStrategy, completedB
       .populate('assignedTeam.contentCreator', 'name email')
       .populate('assignedTeam.uiUxDesigner', 'name email')
       .populate('assignedTeam.graphicDesigner', 'name email')
+      .populate('assignedTeam.videoEditor', 'name email')
       .populate('assignedTeam.developer', 'name email')
       .populate('assignedTeam.tester', 'name email');
 
@@ -71,21 +72,31 @@ async function generateTasksFromStrategy(projectId, creativeStrategy, completedB
     // Generate tasks from creative strategy ad types (if creative strategy exists)
     const tasks = [];
     const adTypes = creativeStrategy?.adTypes || [];
+    const creativePlan = creativeStrategy?.creativePlan || [];
 
     console.log(`Generating tasks for project ${project.businessName}:`);
     console.log(`- Ad types: ${adTypes.length}`);
+    console.log(`- Creative plan items: ${creativePlan.length}`);
     console.log(`- Landing pages: ${landingPages.length}`);
     console.log(`- Team assignments:`, {
       contentCreator: project.assignedTeam?.contentCreator?._id || 'none',
       graphicDesigner: project.assignedTeam?.graphicDesigner?._id || 'none',
+      videoEditor: project.assignedTeam?.videoEditor?._id || 'none',
       uiUxDesigner: project.assignedTeam?.uiUxDesigner?._id || 'none',
       developer: project.assignedTeam?.developer?._id || 'none',
       tester: project.assignedTeam?.tester?._id || 'none'
     });
 
+    // Generate tasks from legacy ad types
     for (const adType of adTypes) {
       const adTypeTasks = generateAdTypeTasks(adType, projectId, creativeStrategy?._id || null, strategyContext, project, completedBy, contextLink, contextPdfUrl);
       tasks.push(...adTypeTasks);
+    }
+
+    // Generate tasks from new creative plan
+    if (creativePlan.length > 0) {
+      const creativePlanTasks = generateCreativePlanTasks(creativePlan, projectId, creativeStrategy?._id || null, strategyContext, project, completedBy, contextLink, contextPdfUrl);
+      tasks.push(...creativePlanTasks);
     }
 
     // Generate landing page tasks for EACH landing page
@@ -97,7 +108,7 @@ async function generateTasksFromStrategy(projectId, creativeStrategy, completedB
 
     // Only save if there are tasks to create
     if (tasks.length === 0) {
-      console.log(`No tasks generated for project ${project.businessName} - no ad types or landing pages with assigned team members`);
+      console.log(`No tasks generated for project ${project.businessName} - no ad types, creative plan, or landing pages with assigned team members`);
       return [];
     }
 
@@ -467,6 +478,95 @@ function generateLandingPageTasks(landingPage, projectId, creativeStrategyId, st
 }
 
 /**
+ * Generate tasks from the new creative plan structure
+ * Each creative plan item creates a content task and a design/edit task
+ */
+function generateCreativePlanTasks(creativePlan, projectId, creativeStrategyId, strategyContext, project, completedBy, contextLink, contextPdfUrl) {
+  const tasks = [];
+
+  const contentCreator = project.assignedTeam.contentCreator?._id;
+  const graphicDesigner = project.assignedTeam.graphicDesigner?._id;
+  const videoEditor = project.assignedTeam.videoEditor?._id;
+
+  // Category to task type mapping
+  const categoryTaskTypeMap = {
+    'IMAGE': { contentTask: 'content_creation', designTask: 'graphic_design', assetType: 'image_creative' },
+    'VIDEO': { contentTask: 'content_creation', designTask: 'video_editing', assetType: 'video_creative' },
+    'CAROUSEL': { contentTask: 'content_creation', designTask: 'graphic_design', assetType: 'carousel_creative' },
+    'UGC': { contentTask: 'content_creation', designTask: 'video_editing', assetType: 'ugc_content' },
+    'TESTIMONIAL': { contentTask: 'content_creation', designTask: 'video_editing', assetType: 'testimonial_content' },
+    'DEMO_EXPLAINER': { contentTask: 'content_creation', designTask: 'video_editing', assetType: 'demo_video' },
+    'OFFER_SALES': { contentTask: 'content_creation', designTask: 'graphic_design', assetType: 'offer_creative' }
+  };
+
+  // Role to assigned user mapping
+  const roleToUserMap = {
+    'graphic_designer': graphicDesigner,
+    'video_editor': videoEditor
+  };
+
+  for (let i = 0; i < creativePlan.length; i++) {
+    const planItem = creativePlan[i];
+    const categoryConfig = categoryTaskTypeMap[planItem.category] || categoryTaskTypeMap['IMAGE'];
+    const platformStr = (planItem.platforms || []).join(', ');
+
+    // Content creation task (first in workflow)
+    if (contentCreator) {
+      const contentTask = createTask({
+        projectId,
+        creativeStrategyId,
+        taskType: categoryConfig.contentTask,
+        assetType: `${categoryConfig.assetType}_content`,
+        taskTitle: `Content: ${planItem.creativeType}`,
+        assignedRole: 'content_creator',
+        assignedTo: contentCreator,
+        strategyContext,
+        contextLink,
+        contextPdfUrl,
+        platform: platformStr,
+        platforms: planItem.platforms || [],
+        notes: planItem.notes || '',
+        creativeType: planItem.creativeType,
+        creativeCategory: planItem.category,
+        completedBy
+      });
+      contentTask.status = 'content_pending';
+      tasks.push(contentTask);
+    }
+
+    // Design/Edit task (after content approved)
+    const designAssignedTo = roleToUserMap[planItem.assignedRole] || graphicDesigner;
+
+    const designTask = createTask({
+      projectId,
+      creativeStrategyId,
+      taskType: categoryConfig.designTask,
+      assetType: categoryConfig.assetType,
+      taskTitle: `${planItem.creativeType}`,
+      assignedRole: planItem.assignedRole || 'graphic_designer',
+      assignedTo: designAssignedTo,
+      strategyContext,
+      contextLink,
+      contextPdfUrl,
+      platform: platformStr,
+      platforms: planItem.platforms || [],
+      notes: planItem.notes || '',
+      creativeType: planItem.creativeType,
+      creativeCategory: planItem.category,
+      completedBy
+    });
+    designTask.status = 'design_pending';
+    if (contentCreator) {
+      designTask.description = 'This task will become active after content is approved.';
+    }
+    tasks.push(designTask);
+  }
+
+  console.log(`Generated ${tasks.length} tasks from creative plan with ${creativePlan.length} items`);
+  return tasks;
+}
+
+/**
  * Create a task object
  */
 function createTask({
@@ -490,6 +590,8 @@ function createTask({
   cta = '',
   messagingAngle = '',
   notes = '',
+  creativeType = '',
+  creativeCategory = '',
   landingPageType = '',
   leadCapture = null,
   completedBy
@@ -551,7 +653,11 @@ function createTask({
       // Additional context
       notes: notes || '',
       adTypeKey: adTypeKey,
-      adTypeName: adTypeName
+      adTypeName: adTypeName,
+
+      // Creative plan fields
+      creativeType: creativeType || adTypeName || '',
+      creativeCategory: creativeCategory || ''
     },
     dueDate: calculateDueDate(taskType)
   };

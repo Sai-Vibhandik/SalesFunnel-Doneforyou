@@ -24,7 +24,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['admin', 'performance_marketer', 'ui_ux_designer', 'graphic_designer', 'developer', 'tester', 'content_creator'],
+    enum: ['admin', 'performance_marketer', 'ui_ux_designer', 'graphic_designer', 'video_editor', 'developer', 'tester', 'content_creator'],
     default: 'performance_marketer'
   },
   specialization: {

@@ -54,7 +54,7 @@ const ASSET_TYPES = [
 // Role assignment mapping
 const ROLE_ASSIGNMENT = {
   graphic_design: 'graphic_designer',
-  video_editing: 'graphic_designer',
+  video_editing: 'video_editor',
   landing_page_design: 'ui_ux_designer',
   landing_page_development: 'developer',
   content_creation: 'content_creator'
@@ -106,7 +106,7 @@ const taskSchema = new mongoose.Schema({
   },
   assignedRole: {
     type: String,
-    enum: ['content_creator', 'graphic_designer', 'ui_ux_designer', 'developer', 'tester', 'performance_marketer'],
+    enum: ['content_creator', 'graphic_designer', 'video_editor', 'ui_ux_designer', 'developer', 'tester', 'performance_marketer'],
     required: true
   },
   assignedBy: {
@@ -182,7 +182,11 @@ const taskSchema = new mongoose.Schema({
     // Additional context
     notes: { type: String },
     adTypeKey: { type: String },
-    adTypeName: { type: String }
+    adTypeName: { type: String },
+
+    // Creative plan fields
+    creativeType: { type: String },
+    creativeCategory: { type: String }
   },
 
   // Strategy Context Links (for team members)

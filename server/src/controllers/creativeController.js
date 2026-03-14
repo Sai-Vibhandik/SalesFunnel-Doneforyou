@@ -110,6 +110,8 @@ exports.upsertCreativeStrategy = async (req, res, next) => {
       creativeBrief,
       brandGuidelines,
       adTypes,
+      creativePlan,
+      creativeCategories,
       additionalNotes,
       isCompleted
     } = req.body;
@@ -124,6 +126,8 @@ exports.upsertCreativeStrategy = async (req, res, next) => {
       creativeBrief: creativeBrief || '',
       brandGuidelines: brandGuidelines || {},
       adTypes: adTypes || [],
+      creativePlan: creativePlan || [],
+      creativeCategories: creativeCategories || [],
       additionalNotes: additionalNotes || '',
       createdBy: req.user._id
     };

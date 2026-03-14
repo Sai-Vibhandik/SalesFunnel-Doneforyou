@@ -294,7 +294,7 @@ exports.createTeamMember = async (req, res, next) => {
     }
 
     // Validate role
-    const validRoles = ['admin', 'performance_marketer', 'ui_ux_designer', 'graphic_designer', 'developer', 'tester'];
+    const validRoles = ['admin', 'performance_marketer', 'ui_ux_designer', 'graphic_designer', 'video_editor', 'developer', 'tester', 'content_creator'];
     if (role && !validRoles.includes(role)) {
       return res.status(400).json({
         success: false,
@@ -325,8 +325,10 @@ exports.createTeamMember = async (req, res, next) => {
           // Map role to project team field
           const roleToTeamField = {
             'performance_marketer': 'performanceMarketer',
+            'content_creator': 'contentCreator',
             'ui_ux_designer': 'uiUxDesigner',
             'graphic_designer': 'graphicDesigner',
+            'video_editor': 'videoEditor',
             'developer': 'developer',
             'tester': 'tester'
           };
@@ -495,7 +497,7 @@ exports.deleteTeamMember = async (req, res, next) => {
 // @access  Private
 exports.getTeamByRole = async (req, res, next) => {
   try {
-    const roles = ['performance_marketer', 'content_creator', 'ui_ux_designer', 'graphic_designer', 'developer', 'tester'];
+    const roles = ['performance_marketer', 'content_creator', 'ui_ux_designer', 'graphic_designer', 'video_editor', 'developer', 'tester'];
 
     const teamByRole = {};
 

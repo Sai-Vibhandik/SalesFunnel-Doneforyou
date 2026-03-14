@@ -51,7 +51,7 @@ const landingPageSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  // Strategy fields
+  // Strategy fields (frontend-facing names)
   hook: {
     type: String,
     trim: true
@@ -65,23 +65,40 @@ const landingPageSchema = new mongoose.Schema({
     enum: ['facebook', 'instagram', 'youtube', 'google', 'linkedin', 'tiktok', 'twitter', 'whatsapp', 'multi'],
     default: 'facebook'
   },
-  offer: {
-    headline: { type: String, trim: true },
-    description: { type: String, trim: true },
-    price: { type: Number },
-    bonus: { type: String, trim: true }
+  cta: {
+    type: String,
+    trim: true
   },
-  // Existing fields
+  offer: {
+    type: String,
+    trim: true
+  },
+  messaging: {
+    type: String,
+    trim: true
+  },
+  leadCaptureMethod: {
+    type: String,
+    enum: ['form', 'calendly', 'whatsapp', 'free_audit'],
+    default: 'form'
+  },
+  // Funnel type (frontend field name - primary)
+  funnelType: {
+    type: String,
+    enum: ['video_sales_letter', 'long_form', 'lead_magnet', 'ebook', 'webinar'],
+    default: 'video_sales_letter'
+  },
+  // Legacy field for backward compatibility
   type: {
     type: String,
     enum: ['video_sales_letter', 'long_form', 'lead_magnet', 'ebook', 'webinar'],
     default: 'video_sales_letter'
   },
-  leadCapture: {
-    type: leadCaptureSchema,
-    default: () => ({})
+  // Legacy ctaText for backward compatibility
+  ctaText: {
+    type: String,
+    trim: true
   },
-  nurturing: [nurturingSchema],
   headline: {
     type: String,
     trim: true
@@ -90,10 +107,12 @@ const landingPageSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
-  ctaText: {
-    type: String,
-    trim: true
+  // Extended lead capture configuration
+  leadCapture: {
+    type: leadCaptureSchema,
+    default: () => ({})
   },
+  nurturing: [nurturingSchema],
   designPreferences: {
     primaryColor: { type: String, default: '#3B82F6' },
     secondaryColor: { type: String, default: '#1E40AF' },
@@ -134,13 +153,13 @@ landingPageSchema.methods.calculateCompletion = function() {
   const totalItems = 8;
 
   if (this.name) completedItems++;
-  if (this.type) completedItems++;
+  if (this.funnelType || this.type) completedItems++;
   if (this.hook) completedItems++;
   if (this.angle) completedItems++;
   if (this.platform) completedItems++;
-  if (this.leadCapture?.method) completedItems++;
+  if (this.leadCaptureMethod || this.leadCapture?.method) completedItems++;
   if (this.headline) completedItems++;
-  if (this.ctaText) completedItems++;
+  if (this.cta || this.ctaText) completedItems++;
 
   return Math.round((completedItems / totalItems) * 100);
 };
