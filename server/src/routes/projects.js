@@ -13,6 +13,12 @@ const {
   uploadAssets,
   getAssignedProjects
 } = require('../controllers/projectController');
+const {
+  getStrategySummary,
+  getStrategySummaryText,
+  getStrategySummaryPdf,
+  getTaskContext
+} = require('../controllers/strategySummaryController');
 const { protect, authorize } = require('../middleware/auth');
 const { handleUpload, uploadBrandAssets } = require('../middleware/upload');
 
@@ -45,5 +51,11 @@ router.put('/:id/activate', authorize('admin'), toggleProjectActivation);
 
 // Brand assets upload
 router.post('/:id/assets', handleUpload(uploadBrandAssets), uploadAssets);
+
+// Strategy Summary Routes
+router.get('/:projectId/strategy-summary', getStrategySummary);
+router.get('/:projectId/strategy-summary/text', getStrategySummaryText);
+router.get('/:projectId/strategy-summary/pdf', getStrategySummaryPdf);
+router.get('/:projectId/strategy-summary/context', getTaskContext);
 
 module.exports = router;

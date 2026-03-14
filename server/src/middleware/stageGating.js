@@ -1,6 +1,8 @@
 const Project = require('../models/Project');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
+const CreativeStrategy = require('../models/Creative');
+const { generateTasksFromStrategy } = require('../services/taskGenerationService');
 
 // Stage mapping for validation
 const STAGE_MAP = {
@@ -95,7 +97,7 @@ exports.checkStageAccess = (stageKey) => {
 };
 
 // Middleware to mark stage as completed
-exports.completeStage = async (projectId, stageKey) => {
+exports.completeStage = async (projectId, stageKey, completedBy = null) => {
   const project = await Project.findById(projectId);
 
   if (!project) {
@@ -142,6 +144,20 @@ exports.completeStage = async (projectId, stageKey) => {
     }
 
     console.log(`Strategy completed for project ${projectDisplay}. Notified ${admins.length} admins.`);
+
+    // Generate tasks automatically when strategy is completed
+    try {
+      const creativeStrategy = await CreativeStrategy.findOne({ projectId });
+      if (creativeStrategy && creativeStrategy.adTypes && creativeStrategy.adTypes.length > 0) {
+        // Use the completedBy user if provided, otherwise use project creator
+        const taskCreator = completedBy || project.createdBy;
+        const tasks = await generateTasksFromStrategy(projectId, creativeStrategy, taskCreator);
+        console.log(`Generated ${tasks.length} tasks for project ${projectDisplay}`);
+      }
+    } catch (error) {
+      console.error('Error generating tasks after strategy completion:', error);
+      // Don't throw - we don't want to fail the stage completion if task generation fails
+    }
   }
 
   await project.save();

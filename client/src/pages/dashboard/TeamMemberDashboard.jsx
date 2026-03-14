@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { projectService } from '@/services/api';
+import { projectService, taskService } from '@/services/api';
 import { Card, CardBody, Button, Badge, ProgressBar, Spinner } from '@/components/ui';
 import {
   FolderKanban,
@@ -13,6 +13,12 @@ import {
   Palette,
   Code,
   Bug,
+  FileText,
+  Upload,
+  Send,
+  Eye,
+  ExternalLink,
+  FileDown
 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
@@ -20,65 +26,122 @@ const ROLE_CONFIG = {
   ui_ux_designer: {
     icon: Palette,
     color: 'purple',
-    stage: 'UI/UX Design',
-    description: 'Design tasks will appear here.',
+    title: 'UI/UX Designer Dashboard',
+    taskTypes: ['landing_page_design'],
+    actions: ['view_tasks', 'upload_design']
   },
   graphic_designer: {
     icon: Palette,
     color: 'pink',
-    stage: 'Creative Strategy',
-    description: 'Design tasks will appear here.',
+    title: 'Designer Dashboard',
+    taskTypes: ['graphic_design', 'video_editing', 'content_writing'],
+    actions: ['view_tasks', 'upload_creative']
   },
   developer: {
     icon: Code,
     color: 'green',
-    stage: 'Development',
-    description: 'Development tasks will appear here.',
+    title: 'Developer Dashboard',
+    taskTypes: ['landing_page_development'],
+    actions: ['view_tasks', 'upload_code']
   },
   tester: {
     icon: Bug,
     color: 'orange',
-    stage: 'Testing',
-    description: 'Testing tasks will appear here.',
-  },
+    title: 'Tester Dashboard',
+    taskTypes: [], // Testers review all task types
+    actions: ['view_pending', 'approve_reject']
+  }
+};
+
+const STATUS_CONFIG = {
+  todo: { label: 'To Do', color: 'bg-gray-100 text-gray-800' },
+  in_progress: { label: 'In Progress', color: 'bg-blue-100 text-blue-800' },
+  submitted: { label: 'Submitted', color: 'bg-yellow-100 text-yellow-800' },
+  approved_by_tester: { label: 'Tester Approved', color: 'bg-purple-100 text-purple-800' },
+  final_approved: { label: 'Completed', color: 'bg-green-100 text-green-800' },
+  rejected: { label: 'Rejected', color: 'bg-red-100 text-red-800' },
+  design_pending: { label: 'Design Pending', color: 'bg-orange-100 text-orange-800' },
+  design_submitted: { label: 'Design Review', color: 'bg-yellow-100 text-yellow-800' },
+  design_approved: { label: 'Design Approved', color: 'bg-purple-100 text-purple-800' },
+  development_pending: { label: 'Dev Pending', color: 'bg-orange-100 text-orange-800' },
+  development_submitted: { label: 'Dev Review', color: 'bg-yellow-100 text-yellow-800' },
+  development_approved: { label: 'Dev Approved', color: 'bg-purple-100 text-purple-800' }
 };
 
 export default function TeamMemberDashboard({ user }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [pendingReview, setPendingReview] = useState([]);
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
     completed: 0,
+    pendingTasks: 0,
+    inProgressTasks: 0
   });
 
-  const roleConfig = ROLE_CONFIG[user?.role] || ROLE_CONFIG.ui_ux_designer;
+  const roleConfig = ROLE_CONFIG[user?.role] || ROLE_CONFIG.graphic_designer;
   const Icon = roleConfig.icon;
+  const isTester = user?.role === 'tester';
 
   useEffect(() => {
-    fetchAssignedProjects();
-  }, []);
+    fetchDashboardData();
+  }, [user?.role]);
 
-  const fetchAssignedProjects = async () => {
+  const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const response = await projectService.getProjects({ limit: 50 });
-      const assignedProjects = response.data || [];
+
+      // Fetch projects and tasks in parallel
+      const [projectsRes, tasksRes] = await Promise.all([
+        projectService.getProjects({ limit: 50 }),
+        taskService.getMyTasks()
+      ]);
+
+      const assignedProjects = projectsRes.data || [];
+      const assignedTasks = tasksRes.data || [];
 
       setProjects(assignedProjects);
+      setTasks(assignedTasks);
+
+      // If tester, also fetch pending review tasks
+      if (isTester) {
+        try {
+          const reviewRes = await taskService.getPendingReview();
+          setPendingReview(reviewRes.data || []);
+        } catch (err) {
+          console.log('Could not fetch pending review tasks');
+        }
+      }
 
       // Calculate stats
       const total = assignedProjects.length;
       const active = assignedProjects.filter(p => p.isActive && p.status === 'active').length;
       const completed = assignedProjects.filter(p => p.status === 'completed').length;
+      const pendingTasks = assignedTasks.filter(t =>
+        ['todo', 'design_pending', 'development_pending'].includes(t.status)
+      ).length;
+      const inProgressTasks = assignedTasks.filter(t =>
+        ['in_progress', 'submitted', 'design_submitted', 'development_submitted'].includes(t.status)
+      ).length;
 
-      setStats({ total, active, completed });
+      setStats({ total, active, completed, pendingTasks, inProgressTasks });
     } catch (error) {
-      console.error('Failed to load projects:', error);
+      console.error('Failed to load dashboard:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const getStatusBadge = (status) => {
+    const config = STATUS_CONFIG[status] || STATUS_CONFIG.todo;
+    return (
+      <span className={`px-2 py-1 text-xs rounded-full ${config.color}`}>
+        {config.label}
+      </span>
+    );
   };
 
   if (loading) {
@@ -95,20 +158,26 @@ export default function TeamMemberDashboard({ user }) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            Welcome, {user?.name?.split(' ')[0] || 'Team Member'}!
+            {roleConfig.title}
           </h1>
           <p className="text-gray-600 mt-1">
-            Here's an overview of your assigned projects.
+            Welcome back, {user?.name?.split(' ')[0] || 'Team Member'}! Here's your work overview.
           </p>
         </div>
-        <Button variant="secondary" onClick={() => navigate('/projects')}>
-          <FolderKanban className="w-4 h-4 mr-2" />
-          View All Projects
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => navigate('/projects')}>
+            <FolderKanban className="w-4 h-4 mr-2" />
+            Projects
+          </Button>
+          <Button onClick={() => navigate('/tasks')}>
+            <Clock className="w-4 h-4 mr-2" />
+            My Tasks
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardBody className="p-4">
             <div className="flex items-center justify-between">
@@ -127,7 +196,7 @@ export default function TeamMemberDashboard({ user }) {
           <CardBody className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Active</p>
+                <p className="text-sm text-gray-500">Active Projects</p>
                 <p className="text-2xl font-bold text-green-600">{stats.active}</p>
               </div>
               <div className="p-3 bg-green-100 rounded-lg">
@@ -141,157 +210,185 @@ export default function TeamMemberDashboard({ user }) {
           <CardBody className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Completed</p>
-                <p className="text-2xl font-bold text-purple-600">{stats.completed}</p>
+                <p className="text-sm text-gray-500">Pending Tasks</p>
+                <p className="text-2xl font-bold text-orange-600">{stats.pendingTasks}</p>
               </div>
-              <div className="p-3 bg-purple-100 rounded-lg">
-                <CheckCircle className="w-6 h-6 text-purple-600" />
+              <div className="p-3 bg-orange-100 rounded-lg">
+                <Clock className="w-6 h-6 text-orange-600" />
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardBody className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500">In Progress</p>
+                <p className="text-2xl font-bold text-blue-600">{stats.inProgressTasks}</p>
+              </div>
+              <div className="p-3 bg-blue-100 rounded-lg">
+                <Send className="w-6 h-6 text-blue-600" />
               </div>
             </div>
           </CardBody>
         </Card>
       </div>
 
-      {/* No Projects State */}
-      {projects.length === 0 ? (
+      {/* Tester: Pending Review Section */}
+      {isTester && pendingReview.length > 0 && (
+        <Card>
+          <CardBody className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Pending Review ({pendingReview.length})
+              </h2>
+              <Button variant="secondary" size="sm" onClick={() => navigate('/tasks/review')}>
+                View All
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+            <div className="space-y-3">
+              {pendingReview.slice(0, 3).map((task) => (
+                <div key={task._id} className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                  <div>
+                    <p className="font-medium text-gray-900">{task.taskTitle}</p>
+                    <p className="text-sm text-gray-500">
+                      {task.projectId?.businessName || 'Unknown Project'}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => navigate('/tasks/review')}>
+                      <Eye className="w-4 h-4 mr-1" />
+                      Review
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      {/* My Tasks Section */}
+      {tasks.length > 0 && (
+        <Card>
+          <CardBody className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">My Tasks</h2>
+              <Button variant="secondary" size="sm" onClick={() => navigate('/tasks')}>
+                View All Tasks
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+            <div className="space-y-3">
+              {tasks.slice(0, 5).map((task) => (
+                <div key={task._id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      {getStatusBadge(task.status)}
+                      <span className="text-sm text-gray-500">{task.taskType?.replace(/_/g, ' ')}</span>
+                    </div>
+                    <p className="font-medium text-gray-900">{task.taskTitle}</p>
+                    <p className="text-sm text-gray-500">
+                      {task.projectId?.businessName || 'Unknown Project'}
+                      {task.dueDate && (
+                        <span className="ml-2">
+                          • Due: {new Date(task.dueDate).toLocaleDateString()}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => navigate(`/tasks/${task._id}`)}
+                    >
+                      View Task
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      {/* Active Projects */}
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Active Projects</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {projects
+            .filter(p => p.isActive && p.status === 'active')
+            .slice(0, 6)
+            .map((project) => (
+              <Card
+                key={project._id}
+                className="hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => navigate(`/projects/${project._id}`)}
+              >
+                <CardBody className="p-5">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <h3 className="font-semibold text-gray-900">
+                        {project.projectName || project.businessName}
+                      </h3>
+                      <p className="text-sm text-gray-500">{project.customerName}</p>
+                    </div>
+                    <Badge variant="success">Active</Badge>
+                  </div>
+
+                  <div className="mb-3">
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600">Progress</span>
+                      <span className="font-medium">{project.overallProgress}%</span>
+                    </div>
+                    <ProgressBar
+                      value={project.overallProgress}
+                      size="sm"
+                      color={project.overallProgress === 100 ? 'success' : 'primary'}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">
+                      <Clock className="w-4 h-4 inline mr-1" />
+                      {formatDate(project.updatedAt)}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/projects/${project._id}`);
+                      }}
+                    >
+                      View <ChevronRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </div>
+                </CardBody>
+              </Card>
+            ))}
+        </div>
+      </div>
+
+      {/* No Tasks State */}
+      {tasks.length === 0 && !isTester && (
         <Card>
           <CardBody className="py-12">
             <div className="text-center">
               <AlertCircle className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Assigned Projects</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Tasks Assigned</h3>
               <p className="text-gray-600 mb-4">
-                You haven't been assigned to any projects yet. Contact your administrator to get started.
+                You haven't been assigned any tasks yet. Tasks will appear here once they're created.
               </p>
               <Button variant="secondary" onClick={() => navigate('/projects')}>
-                View All Projects
+                View Projects
               </Button>
             </div>
           </CardBody>
         </Card>
-      ) : (
-        <>
-          {/* Active Projects */}
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Active Projects</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {projects
-                .filter(p => p.isActive && p.status === 'active')
-                .map((project) => (
-                  <Card
-                    key={project._id}
-                    className="hover:shadow-md transition-shadow cursor-pointer"
-                    onClick={() => navigate(`/projects/${project._id}`)}
-                  >
-                    <CardBody className="p-5">
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <h3 className="font-semibold text-gray-900">
-                            {project.projectName || project.businessName}
-                          </h3>
-                          <p className="text-sm text-gray-500">{project.customerName}</p>
-                        </div>
-                        <Badge variant="success">Active</Badge>
-                      </div>
-
-                      <div className="mb-3">
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-600">Progress</span>
-                          <span className="font-medium">{project.overallProgress}%</span>
-                        </div>
-                        <ProgressBar
-                          value={project.overallProgress}
-                          size="sm"
-                          color={project.overallProgress === 100 ? 'success' : 'primary'}
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-500">
-                          <Clock className="w-4 h-4 inline mr-1" />
-                          {formatDate(project.updatedAt)}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/projects/${project._id}`);
-                          }}
-                        >
-                          View <ChevronRight className="w-4 h-4 ml-1" />
-                        </Button>
-                      </div>
-                    </CardBody>
-                  </Card>
-                ))}
-            </div>
-          </div>
-
-          {/* Other Projects */}
-          {projects.filter(p => !p.isActive || p.status !== 'active').length > 0 && (
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Other Projects</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {projects
-                  .filter(p => !p.isActive || p.status !== 'active')
-                  .map((project) => (
-                    <Card
-                      key={project._id}
-                      className="hover:shadow-md transition-shadow cursor-pointer opacity-75"
-                      onClick={() => navigate(`/projects/${project._id}`)}
-                    >
-                      <CardBody className="p-4">
-                        <div className="flex items-start justify-between mb-2">
-                          <div>
-                            <h3 className="font-medium text-gray-900">
-                              {project.projectName || project.businessName}
-                            </h3>
-                            <p className="text-sm text-gray-500">{project.customerName}</p>
-                          </div>
-                          <Badge
-                            variant={
-                              project.status === 'completed' ? 'success' :
-                              project.status === 'paused' ? 'warning' : 'default'
-                            }
-                          >
-                            {project.status}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-gray-500">
-                          Updated {formatDate(project.updatedAt)}
-                        </p>
-                      </CardBody>
-                    </Card>
-                  ))}
-              </div>
-            </div>
-          )}
-
-          {/* Quick Access */}
-          <Card>
-            <CardBody className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Access</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Button
-                  variant="outline"
-                  className="flex flex-col items-center gap-2 h-auto py-4"
-                  onClick={() => navigate('/projects')}
-                >
-                  <FolderKanban className="w-5 h-5" />
-                  <span className="text-sm">All Projects</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex flex-col items-center gap-2 h-auto py-4"
-                  onClick={() => navigate('/tasks')}
-                >
-                  <Clock className="w-5 h-5" />
-                  <span className="text-sm">My Tasks</span>
-                </Button>
-              </div>
-            </CardBody>
-          </Card>
-        </>
       )}
     </div>
   );

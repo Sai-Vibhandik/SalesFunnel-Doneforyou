@@ -8,7 +8,22 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['project_assigned', 'project_updated', 'stage_completed', 'comment', 'project_activated', 'strategy_completed', 'strategy_reviewed'],
+    enum: [
+      'project_assigned',
+      'project_updated',
+      'stage_completed',
+      'comment',
+      'project_activated',
+      'strategy_completed',
+      'strategy_reviewed',
+      // Task-related notifications
+      'task_assigned',
+      'task_submitted',
+      'task_approved_by_tester',
+      'task_approved_by_marketer',
+      'task_rejected',
+      'task_revision_requested'
+    ],
     required: true
   },
   title: {

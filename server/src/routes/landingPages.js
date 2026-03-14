@@ -6,10 +6,11 @@ const {
   addNurturing,
   removeNurturing
 } = require('../controllers/landingPageController');
-const { protect } = require('../middleware/auth');
+const { protect, authorize } = require('../middleware/auth');
 
-// All routes are protected
+// All routes are protected and require admin or performance_marketer role
 router.use(protect);
+router.use(authorize('admin', 'performance_marketer'));
 
 // Landing page routes
 router.route('/:projectId')

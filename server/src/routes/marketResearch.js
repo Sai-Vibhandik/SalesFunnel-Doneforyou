@@ -8,7 +8,7 @@ const {
   uploadVisionBoard,
   uploadStrategySheet
 } = require('../controllers/marketResearchController');
-const { protect } = require('../middleware/auth');
+const { protect, authorize } = require('../middleware/auth');
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -36,8 +36,9 @@ const upload = multer({
   }
 });
 
-// All routes are protected
+// All routes are protected and require admin or performance_marketer role
 router.use(protect);
+router.use(authorize('admin', 'performance_marketer'));
 
 // Market research routes
 router.route('/:projectId')

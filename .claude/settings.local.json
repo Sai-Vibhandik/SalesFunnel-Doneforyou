@@ -45,7 +45,12 @@
       "Bash(cd A:/LandingPagesUkValley/SalesFunnelDashboard/server && timeout 5 node -e \"\nconst http = require\\('http'\\);\n\n// Simulate a frontend request to create user\nconst userData = JSON.stringify\\({\n  name: 'Frontend Test User',\n  email: 'frontendtest_' + Date.now\\(\\) + '@test.com',\n  password: 'test123456',\n  role: 'performance_marketer'\n}\\);\n\n// First login to get token\nconst loginData = JSON.stringify\\({\n  email: 'admin@growthvalley.com',\n  password: 'admin123'\n}\\);\n\nconst loginReq = http.request\\({\n  hostname: 'localhost',\n  port: 5000,\n  path: '/api/auth/login',\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' }\n}, \\(res\\) => {\n  let data = '';\n  res.on\\('data', chunk => data += chunk\\);\n  res.on\\('end', \\(\\) => {\n    const parsed = JSON.parse\\(data\\);\n    if \\(parsed.token\\) {\n      // Now create user\n      const createReq = http.request\\({\n        hostname: 'localhost',\n        port: 5000,\n        path: '/api/auth/create-user',\n        method: 'POST',\n        headers: {\n          'Content-Type': 'application/json',\n          'Authorization': 'Bearer ' + parsed.token,\n          'Content-Length': Buffer.byteLength\\(userData\\)\n        }\n      }, \\(res2\\) => {\n        let data2 = '';\n        res2.on\\('data', chunk => data2 += chunk\\);\n        res2.on\\('end', \\(\\) => {\n          console.log\\('Status:', res2.statusCode\\);\n          console.log\\('Response:', data2\\);\n        }\\);\n      }\\);\n      createReq.write\\(userData\\);\n      createReq.end\\(\\);\n    }\n  }\\);\n}\\);\nloginReq.write\\(loginData\\);\nloginReq.end\\(\\);\n\" 2>&1)",
       "Bash(taskkill /F /PID 27516)",
       "Bash(taskkill //F //PID 27516)",
-      "Bash(cd \"A:\\\\LandingPagesUkValley\\\\SalesFunnelDashboard\" && tasklist | grep -i \"node\" 2>/dev/null || echo \"No node processes found\")"
+      "Bash(cd \"A:\\\\LandingPagesUkValley\\\\SalesFunnelDashboard\" && tasklist | grep -i \"node\" 2>/dev/null || echo \"No node processes found\")",
+      "Bash(npm run:*)",
+      "Bash(npm test:*)",
+      "Bash(node:*)",
+      "Bash(netstat:*)",
+      "Bash(taskkill:*)"
     ]
   }
 }

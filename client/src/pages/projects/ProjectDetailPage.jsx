@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { projectService } from '@/services/api';
 import { Card, CardBody, CardHeader, Button, Badge, ProgressBar, Spinner } from '@/components/ui';
 import { StageProgressTracker } from '@/components/workflow';
+import { ProjectSummary, TeamMemberProjectView, TesterProjectView } from '@/components/project';
 import {
   ArrowLeft,
   Edit,
@@ -66,6 +67,11 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState(null);
 
   const isAdmin = user?.role === 'admin';
+  const isPerformanceMarketer = user?.role === 'performance_marketer';
+  const isDesigner = user?.role === 'graphic_designer' || user?.role === 'ui_ux_designer';
+  const isDeveloper = user?.role === 'developer';
+  const isTester = user?.role === 'tester';
+  const isTeamMember = isDesigner || isDeveloper || isTester;
 
   useEffect(() => {
     fetchProject();
@@ -136,6 +142,18 @@ export default function ProjectDetailPage() {
     };
   });
 
+  // Role-based views
+  // Tester: Show TesterProjectView
+  if (isTester) {
+    return <TesterProjectView />;
+  }
+
+  // Designer/Developer: Show TeamMemberProjectView
+  if (isDesigner || isDeveloper) {
+    return <TeamMemberProjectView />;
+  }
+
+  // Performance Marketer & Admin: Show full project management
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -315,8 +333,13 @@ export default function ProjectDetailPage() {
         </Card>
       )}
 
-      {/* Workflow Stages - Only for Non-Admin */}
-      {!isAdmin && (
+      {/* Project Summary for Performance Marketer */}
+      {isPerformanceMarketer && (
+        <ProjectSummary projectId={id} />
+      )}
+
+      {/* Workflow Stages - Only for Non-Admin Performance Marketer */}
+      {!isAdmin && isPerformanceMarketer && (
         <>
           <h2 className="text-lg font-semibold text-gray-900">Workflow Stages</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

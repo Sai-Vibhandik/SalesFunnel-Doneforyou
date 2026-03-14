@@ -41,11 +41,11 @@ const marketResearchSchema = new mongoose.Schema({
     type: String,
     trim: true
   }],
-  competitors: [{
-    name: { type: String },
-    strengths: [{ type: String }],
-    weaknesses: [{ type: String }]
-  }],
+  // Competitors can be a simple text description or structured array
+  competitors: {
+    type: String,
+    default: ''
+  },
   visionBoard: {
     fileName: { type: String },
     filePath: { type: String },
@@ -94,7 +94,7 @@ marketResearchSchema.methods.calculateCompletion = function() {
   if (this.painPoints?.length > 0) completedFields++;
   if (this.desires?.length > 0) completedFields++;
   if (this.existingPurchases?.length > 0) completedFields++;
-  if (this.competitors?.length > 0) completedFields++;
+  if (this.competitors && this.competitors.trim().length > 0) completedFields++;
 
   return Math.round((completedFields / fields.length) * 100);
 };

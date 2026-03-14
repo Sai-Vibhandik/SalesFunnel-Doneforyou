@@ -26,9 +26,16 @@ import {
 
 // Tasks
 import { TasksPage } from '@/pages/tasks';
+import TesterReviewPage from '@/pages/tasks/TesterReviewPage';
+import MarketerApprovalPage from '@/pages/tasks/MarketerApprovalPage';
+import TaskDetailPage from '@/pages/tasks/TaskDetailPage';
+import ApprovedAssetsPage from '@/pages/tasks/ApprovedAssetsPage';
 
 // Team
 import { TeamManagementPage } from '@/pages/team';
+
+// Admin
+import { ClientsPage, SOPLibraryPage } from '@/pages/admin';
 
 // Protected Route wrapper
 function ProtectedRoute({ children }) {
@@ -90,6 +97,30 @@ function TeamRoute({ children }) {
 
   // Admin cannot access strategy stages
   if (user?.role === 'admin') {
+    return <Navigate to="/projects" replace />;
+  }
+
+  return children;
+}
+
+// Marketer Route wrapper (admin or performance_marketer only - for strategy editing)
+function MarketerRoute({ children }) {
+  const { isAuthenticated, loading, user } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Only admin and performance_marketer can access
+  if (user?.role !== 'admin' && user?.role !== 'performance_marketer') {
     return <Navigate to="/projects" replace />;
   }
 
@@ -177,50 +208,99 @@ function AppRoutes() {
           }
         />
 
-        {/* Stage routes - NOT accessible by admin (team members only) */}
+        {/* Stage routes - Only admin and performance_marketer can edit */}
         <Route
           path="/market-research"
           element={
-            <TeamRoute>
+            <MarketerRoute>
               <MarketResearchPage />
-            </TeamRoute>
+            </MarketerRoute>
           }
         />
         <Route
           path="/offer-engineering"
           element={
-            <TeamRoute>
+            <MarketerRoute>
               <OfferEngineeringPage />
-            </TeamRoute>
+            </MarketerRoute>
           }
         />
         <Route
           path="/traffic-strategy"
           element={
-            <TeamRoute>
+            <MarketerRoute>
               <TrafficStrategyPage />
-            </TeamRoute>
+            </MarketerRoute>
           }
         />
         <Route
           path="/landing-pages"
           element={
-            <TeamRoute>
+            <MarketerRoute>
               <LandingPageStrategyPage />
-            </TeamRoute>
+            </MarketerRoute>
           }
         />
         <Route
           path="/creative-strategy"
           element={
-            <TeamRoute>
+            <MarketerRoute>
               <CreativeStrategyPage />
-            </TeamRoute>
+            </MarketerRoute>
           }
         />
 
         {/* Tasks */}
         <Route path="/tasks" element={<TasksPage />} />
+        <Route path="/tasks/:taskId" element={<TaskDetailPage />} />
+
+        {/* Tester Review - Tester/Admin only */}
+        <Route
+          path="/tasks/review"
+          element={
+            <ProtectedRoute>
+              {(() => {
+                const { user } = useAuth();
+                if (user?.role === 'tester' || user?.role === 'admin') {
+                  return <TesterReviewPage />;
+                }
+                return <Navigate to="/tasks" replace />;
+              })()}
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Marketer Approval - Performance Marketer/Admin only */}
+        <Route
+          path="/tasks/approval"
+          element={
+            <ProtectedRoute>
+              {(() => {
+                const { user } = useAuth();
+                if (user?.role === 'performance_marketer' || user?.role === 'admin') {
+                  return <MarketerApprovalPage />;
+                }
+                return <Navigate to="/tasks" replace />;
+              })()}
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Approved Assets - Tester only */}
+        <Route
+          path="/tasks/approved"
+          element={
+            <ProtectedRoute>
+              {(() => {
+                const { user } = useAuth();
+                if (user?.role === 'tester' || user?.role === 'admin') {
+                  return <ApprovedAssetsPage />;
+                }
+                return <Navigate to="/tasks" replace />;
+              })()}
+            </ProtectedRoute>
+          }
+        />
 
         {/* Team Management (Admin only) */}
         <Route
@@ -228,6 +308,26 @@ function AppRoutes() {
           element={
             <AdminRoute>
               <TeamManagementPage />
+            </AdminRoute>
+          }
+        />
+
+        {/* Clients (Admin only) */}
+        <Route
+          path="/clients"
+          element={
+            <AdminRoute>
+              <ClientsPage />
+            </AdminRoute>
+          }
+        />
+
+        {/* SOP Library (Admin only) */}
+        <Route
+          path="/sop-library"
+          element={
+            <AdminRoute>
+              <SOPLibraryPage />
             </AdminRoute>
           }
         />

@@ -147,7 +147,7 @@ exports.upsertCreativeStrategy = async (req, res, next) => {
 
     // If completed, update project stage
     if (isCompleted && !project.stages.creativeStrategy.isCompleted) {
-      await completeStage(projectId, 'creativeStrategy');
+      await completeStage(projectId, 'creativeStrategy', req.user._id);
     }
 
     // Get updated project

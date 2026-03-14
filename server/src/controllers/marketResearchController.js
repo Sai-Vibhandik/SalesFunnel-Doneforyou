@@ -100,7 +100,7 @@ exports.upsertMarketResearch = async (req, res, next) => {
       painPoints: painPoints || [],
       desires: desires || [],
       existingPurchases: existingPurchases || [],
-      competitors: competitors || [],
+      competitors: competitors || '',
       visionBoard: visionBoard || {},
       strategySheet: strategySheet || {},
       createdBy: req.user._id

@@ -34,8 +34,19 @@ const avatarStorage = new CloudinaryStorage({
   }
 });
 
+// Configure storage for task deliverables (creative assets)
+const taskFilesStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'task-deliverables',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'mov', 'avi', 'webm', 'pdf', 'psd', 'ai', 'sketch', 'fig', 'zip'],
+    resource_type: 'auto'
+  }
+});
+
 module.exports = {
   cloudinary,
   brandAssetsStorage,
-  avatarStorage
+  avatarStorage,
+  taskFilesStorage
 };

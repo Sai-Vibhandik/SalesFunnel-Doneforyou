@@ -1,0 +1,676 @@
+const Task = require('../models/Task');
+const Project = require('../models/Project');
+const User = require('../models/User');
+const Notification = require('../models/Notification');
+const MarketResearch = require('../models/MarketResearch');
+const Offer = require('../models/Offer');
+const TrafficStrategy = require('../models/TrafficStrategy');
+const CreativeStrategy = require('../models/Creative');
+const LandingPage = require('../models/LandingPage');
+
+// SOP References for different task types
+const SOP_REFERENCES = {
+  graphic_design: '/docs/sop/graphic-design-guide.pdf',
+  video_editing: '/docs/sop/video-editing-guide.pdf',
+  landing_page_design: '/docs/sop/landing-page-design-guide.pdf',
+  landing_page_development: '/docs/sop/landing-page-development-guide.pdf',
+  content_writing: '/docs/sop/content-writing-guide.pdf'
+};
+
+// Task type to asset type mapping
+const TASK_ASSET_MAPPING = {
+  image_creative: 'graphic_design',
+  video_creative: 'video_editing',
+  carousel_creative: 'graphic_design',
+  reel: 'video_editing',
+  static_ad: 'graphic_design',
+  landing_page_design: 'landing_page_design',
+  landing_page_page: 'landing_page_development'
+};
+
+/**
+ * Generate tasks automatically when a creative strategy is completed
+ * @param {string} projectId - The project ID
+ * @param {object} creativeStrategy - The creative strategy document
+ * @param {string} completedBy - User ID who completed the strategy
+ */
+async function generateTasksFromStrategy(projectId, creativeStrategy, completedBy) {
+  try {
+    // Get project with team assignments
+    const project = await Project.findById(projectId)
+      .populate('assignedTeam.performanceMarketer', 'name email')
+      .populate('assignedTeam.uiUxDesigner', 'name email')
+      .populate('assignedTeam.graphicDesigner', 'name email')
+      .populate('assignedTeam.developer', 'name email')
+      .populate('assignedTeam.tester', 'name email');
+
+    if (!project) {
+      throw new Error('Project not found');
+    }
+
+    // Get strategy context from all stages
+    const [marketResearch, offer, trafficStrategy, landingPage] = await Promise.all([
+      MarketResearch.findOne({ projectId }),
+      Offer.findOne({ projectId }),
+      TrafficStrategy.findOne({ projectId }),
+      LandingPage.findOne({ projectId })
+    ]);
+
+    // Build strategy context for AI prompts
+    const strategyContext = buildStrategyContext(marketResearch, offer, trafficStrategy, creativeStrategy, project);
+
+    // Generate context links for team members
+    const contextLink = `/projects/${projectId}/strategy-summary`;
+    const contextPdfUrl = `/api/projects/${projectId}/strategy-summary/text`;
+
+    // Generate tasks from creative strategy ad types
+    const tasks = [];
+    const adTypes = creativeStrategy.adTypes || [];
+
+    for (const adType of adTypes) {
+      const adTypeTasks = generateAdTypeTasks(adType, projectId, creativeStrategy._id, strategyContext, project, completedBy, contextLink, contextPdfUrl);
+      tasks.push(...adTypeTasks);
+    }
+
+    // Generate landing page tasks if landing page strategy exists
+    if (landingPage && landingPage.type) {
+      const landingPageTasks = generateLandingPageTasks(landingPage, projectId, strategyContext, project, completedBy, contextLink, contextPdfUrl);
+      tasks.push(...landingPageTasks);
+    }
+
+    // Save all tasks
+    const savedTasks = await Task.insertMany(tasks);
+
+    // Send notifications to assigned users
+    await sendTaskAssignmentNotifications(savedTasks, project);
+
+    console.log(`Generated ${savedTasks.length} tasks for project ${project.businessName}`);
+    return savedTasks;
+  } catch (error) {
+    console.error('Error generating tasks from strategy:', error);
+    throw error;
+  }
+}
+
+/**
+ * Build strategy context for AI prompt generation
+ */
+function buildStrategyContext(marketResearch, offer, trafficStrategy, creativeStrategy, project) {
+  const context = {
+    // Business info
+    businessName: project.businessName,
+    industry: project.industry,
+    customerName: project.customerName,
+
+    // Market research
+    targetAudience: {},
+    painPoints: [],
+    desires: [],
+
+    // Offer
+    offer: {},
+    valueProposition: '',
+
+    // Traffic strategy
+    channels: [],
+    hooks: [],
+
+    // Creative strategy
+    creativeTypes: [],
+    platforms: []
+  };
+
+  // Extract market research data
+  if (marketResearch) {
+    context.targetAudience = {
+      ageRange: marketResearch.avatar?.ageRange || '',
+      location: marketResearch.avatar?.location || '',
+      income: marketResearch.avatar?.income || '',
+      profession: marketResearch.avatar?.profession || '',
+      interests: marketResearch.avatar?.interests || []
+    };
+    context.painPoints = marketResearch.painPoints || [];
+    context.desires = marketResearch.desires || [];
+  }
+
+  // Extract offer data
+  if (offer) {
+    context.offer = {
+      functionalValue: offer.functionalValue,
+      emotionalValue: offer.emotionalValue,
+      bonuses: offer.bonuses,
+      guarantees: offer.guarantees,
+      pricing: offer.pricing
+    };
+    context.valueProposition = `${offer.functionalValue || ''} ${offer.emotionalValue || ''}`.trim();
+  }
+
+  // Extract traffic strategy data
+  if (trafficStrategy) {
+    context.channels = (trafficStrategy.channels || [])
+      .filter(c => c.isSelected)
+      .map(c => c.name);
+    context.hooks = (trafficStrategy.hooks || []).map(h => h.content);
+  }
+
+  // Extract creative strategy data
+  if (creativeStrategy) {
+    context.creativeTypes = (creativeStrategy.adTypes || []).map(at => ({
+      typeKey: at.typeKey,
+      typeName: at.typeName,
+      platforms: at.creatives?.platforms || [],
+      hook: at.creatives?.hook,
+      headline: at.creatives?.headline,
+      cta: at.creatives?.cta,
+      messagingAngle: at.creatives?.messagingAngle
+    }));
+    context.platforms = (creativeStrategy.adTypes || [])
+      .flatMap(at => at.creatives?.platforms || [])
+      .filter((v, i, a) => a.indexOf(v) === i); // unique
+  }
+
+  return context;
+}
+
+/**
+ * Generate tasks for a specific ad type
+ */
+function generateAdTypeTasks(adType, projectId, creativeStrategyId, strategyContext, project, completedBy, contextLink, contextPdfUrl) {
+  const tasks = [];
+  const creatives = adType.creatives || {};
+
+  // Get assigned team members
+  const graphicDesigner = project.assignedTeam.graphicDesigner?._id;
+  const uiuxDesigner = project.assignedTeam.uiUxDesigner?._id;
+  const developer = project.assignedTeam.developer?._id;
+  const tester = project.assignedTeam.tester?._id;
+
+  // Get platforms array
+  const platforms = creatives.platforms || [];
+
+  // Generate image creative tasks
+  if (creatives.imageCreatives > 0) {
+    for (let i = 0; i < creatives.imageCreatives; i++) {
+      // Assign platform (distribute across platforms if multiple)
+      const platform = platforms[i % platforms.length] || 'general';
+
+      const task = createTask({
+        projectId,
+        creativeStrategyId,
+        adTypeKey: adType.typeKey,
+        adTypeName: adType.typeName,
+        taskType: 'graphic_design',
+        assetType: 'image_creative',
+        taskTitle: `${adType.typeName} - Image Creative ${i + 1}`,
+        assignedRole: 'graphic_designer',
+        assignedTo: graphicDesigner,
+        strategyContext,
+        contextLink,
+        contextPdfUrl,
+        platform,
+        platforms,
+        hook: creatives.hook,
+        headline: creatives.headline,
+        cta: creatives.cta,
+        messagingAngle: creatives.messagingAngle,
+        notes: creatives.notes,
+        completedBy
+      });
+      tasks.push(task);
+    }
+  }
+
+  // Generate video creative tasks
+  if (creatives.videoCreatives > 0) {
+    for (let i = 0; i < creatives.videoCreatives; i++) {
+      // Assign platform (distribute across platforms if multiple)
+      const platform = platforms[i % platforms.length] || 'general';
+
+      const task = createTask({
+        projectId,
+        creativeStrategyId,
+        adTypeKey: adType.typeKey,
+        adTypeName: adType.typeName,
+        taskType: 'video_editing',
+        assetType: 'video_creative',
+        taskTitle: `${adType.typeName} - Video Creative ${i + 1}`,
+        assignedRole: 'graphic_designer', // Video editors are often graphic designers
+        assignedTo: graphicDesigner,
+        strategyContext,
+        contextLink,
+        contextPdfUrl,
+        platform,
+        platforms,
+        hook: creatives.hook,
+        headline: creatives.headline,
+        cta: creatives.cta,
+        messagingAngle: creatives.messagingAngle,
+        notes: creatives.notes,
+        completedBy
+      });
+      tasks.push(task);
+    }
+  }
+
+  // Generate carousel creative tasks
+  if (creatives.carouselCreatives > 0) {
+    for (let i = 0; i < creatives.carouselCreatives; i++) {
+      // Assign platform (distribute across platforms if multiple)
+      const platform = platforms[i % platforms.length] || 'general';
+
+      const task = createTask({
+        projectId,
+        creativeStrategyId,
+        adTypeKey: adType.typeKey,
+        adTypeName: adType.typeName,
+        taskType: 'graphic_design',
+        assetType: 'carousel_creative',
+        taskTitle: `${adType.typeName} - Carousel Creative ${i + 1}`,
+        assignedRole: 'graphic_designer',
+        assignedTo: graphicDesigner,
+        strategyContext,
+        contextLink,
+        contextPdfUrl,
+        platform,
+        platforms,
+        hook: creatives.hook,
+        headline: creatives.headline,
+        cta: creatives.cta,
+        messagingAngle: creatives.messagingAngle,
+        notes: creatives.notes,
+        completedBy
+      });
+      tasks.push(task);
+    }
+  }
+
+  return tasks;
+}
+
+/**
+ * Generate tasks for landing page
+ */
+function generateLandingPageTasks(landingPage, projectId, strategyContext, project, completedBy, contextLink, contextPdfUrl) {
+  const tasks = [];
+
+  const uiuxDesigner = project.assignedTeam.uiUxDesigner?._id;
+  const developer = project.assignedTeam.developer?._id;
+
+  // Landing page design task
+  const designTask = createTask({
+    projectId,
+    taskType: 'landing_page_design',
+    assetType: 'landing_page_design',
+    taskTitle: `Landing Page Design - ${landingPage.type?.replace(/_/g, ' ') || 'Standard'}`,
+    assignedRole: 'ui_ux_designer',
+    assignedTo: uiuxDesigner,
+    strategyContext,
+    contextLink,
+    contextPdfUrl,
+    landingPageType: landingPage.type,
+    leadCapture: landingPage.leadCapture,
+    headline: landingPage.headline,
+    subheadline: landingPage.subheadline,
+    cta: landingPage.ctaText,
+    completedBy
+  });
+  designTask.status = 'design_pending';
+  tasks.push(designTask);
+
+  // Landing page development task (will be created after design is approved)
+  const devTask = createTask({
+    projectId,
+    taskType: 'landing_page_development',
+    assetType: 'landing_page_page',
+    taskTitle: `Landing Page Development - ${landingPage.type?.replace(/_/g, ' ') || 'Standard'}`,
+    assignedRole: 'developer',
+    assignedTo: developer,
+    strategyContext,
+    contextLink,
+    contextPdfUrl,
+    landingPageType: landingPage.type,
+    completedBy
+  });
+  devTask.status = 'development_pending';
+  devTask.description = 'This task will become active after the design is approved by the tester.';
+  tasks.push(devTask);
+
+  return tasks;
+}
+
+/**
+ * Create a task object
+ */
+function createTask({
+  projectId,
+  creativeStrategyId = null,
+  adTypeKey = null,
+  adTypeName = null,
+  taskType,
+  assetType,
+  taskTitle,
+  assignedRole,
+  assignedTo,
+  strategyContext,
+  contextLink = '',
+  contextPdfUrl = '',
+  platform = '',
+  platforms = [],
+  hook = '',
+  headline = '',
+  cta = '',
+  messagingAngle = '',
+  notes = '',
+  landingPageType = '',
+  leadCapture = null,
+  completedBy
+}) {
+  // Generate AI prompt based on strategy context
+  const aiPrompt = generateAIPrompt(taskType, assetType, {
+    strategyContext,
+    platforms,
+    hook,
+    headline,
+    cta,
+    messagingAngle,
+    notes,
+    landingPageType,
+    leadCapture
+  });
+
+  const task = {
+    projectId,
+    taskType,
+    assetType,
+    taskTitle,
+    assignedRole,
+    assignedTo: assignedTo || null,
+    assignedBy: completedBy,
+    createdBy: completedBy,
+    status: Task.getInitialStatus(taskType),
+    description: generateTaskDescription(taskType, assetType, strategyContext),
+    aiPrompt,
+    sopReference: SOP_REFERENCES[taskType] || '',
+    contextLink,
+    contextPdfUrl,
+    strategyContext: {
+      // Business context
+      businessName: strategyContext.businessName,
+      industry: strategyContext.industry,
+
+      // Creative identification
+      funnelStage: adTypeKey, // awareness, consideration, conversion, etc.
+      creativeType: assetType, // image_creative, video_creative, etc.
+      platform: platform, // Primary platform for this task
+      platforms: platforms, // All applicable platforms
+
+      // Creative brief content
+      hook: hook || '',
+      creativeAngle: messagingAngle || '',
+      messaging: messagingAngle || '',
+      headline: headline || '',
+      cta: cta || '',
+
+      // Target audience
+      targetAudience: `${strategyContext.targetAudience?.ageRange || ''} ${strategyContext.targetAudience?.profession || ''}`.trim(),
+      painPoints: strategyContext.painPoints || [],
+      desires: strategyContext.desires || [],
+
+      // Offer information
+      offer: strategyContext.valueProposition || '',
+
+      // Additional context
+      notes: notes || '',
+      adTypeKey: adTypeKey,
+      adTypeName: adTypeName
+    },
+    dueDate: calculateDueDate(taskType)
+  };
+
+  if (creativeStrategyId) {
+    task.creativeStrategyId = creativeStrategyId;
+    task.adTypeKey = adTypeKey;
+  }
+
+  return task;
+}
+
+/**
+ * Generate AI prompt for creative brief
+ */
+function generateAIPrompt(taskType, assetType, context) {
+  const { strategyContext, platforms, hook, headline, cta, messagingAngle, notes, landingPageType, leadCapture } = context;
+
+  if (taskType === 'landing_page_design') {
+    return `Create a landing page design for ${strategyContext.businessName || 'a business'} in the ${strategyContext.industry || 'specified'} industry.
+
+TARGET AUDIENCE:
+${strategyContext.targetAudience?.ageRange ? `Age Range: ${strategyContext.targetAudience.ageRange}` : ''}
+${strategyContext.targetAudience?.profession ? `Profession: ${strategyContext.targetAudience.profession}` : ''}
+${strategyContext.targetAudience?.interests?.length ? `Interests: ${strategyContext.targetAudience.interests.join(', ')}` : ''}
+
+PAIN POINTS TO ADDRESS:
+${strategyContext.painPoints?.length ? strategyContext.painPoints.map(p => `- ${p}`).join('\n') : 'Address customer challenges'}
+
+DESIRES & GOALS:
+${strategyContext.desires?.length ? strategyContext.desires.map(d => `- ${d}`).join('\n') : 'Help customers achieve their goals'}
+
+OFFER & VALUE PROPOSITION:
+${strategyContext.offer || 'Create compelling value'}
+
+LANDING PAGE TYPE: ${landingPageType || 'video_sales_letter'}
+${leadCapture?.method ? `LEAD CAPTURE METHOD: ${leadCapture.method}` : ''}
+${headline ? `HEADLINE: ${headline}` : ''}
+${cta ? `CALL-TO-ACTION: ${cta}` : ''}
+
+${messagingAngle ? `MESSAGING ANGLE: ${messagingAngle}` : ''}
+
+Design a landing page that converts. Focus on clear hierarchy, compelling visuals, and a strong call-to-action.`;
+  }
+
+  if (taskType === 'landing_page_development') {
+    return `Develop a landing page for ${strategyContext.businessName || 'a business'}.
+
+LANDING PAGE TYPE: ${landingPageType || 'video_sales_letter'}
+${leadCapture?.method ? `LEAD CAPTURE INTEGRATION: ${leadCapture.method}` : ''}
+
+Ensure responsive design, fast loading times, and proper integration with:
+- Lead capture forms
+- Email marketing tools
+- Analytics tracking
+
+Focus on conversion optimization and user experience.`;
+  }
+
+  // Default for creative tasks
+  return `Create a ${assetType?.replace(/_/g, ' ') || 'creative asset'} for ${strategyContext.businessName || 'a business'} in the ${strategyContext.industry || 'specified'} industry.
+
+TARGET AUDIENCE:
+${strategyContext.targetAudience?.ageRange ? `Age Range: ${strategyContext.targetAudience.ageRange}` : ''}
+${strategyContext.targetAudience?.profession ? `Profession: ${strategyContext.targetAudience.profession}` : ''}
+
+KEY PAIN POINTS:
+${strategyContext.painPoints?.slice(0, 3).map(p => `- ${p}`).join('\n') || 'Understand customer challenges'}
+
+CUSTOMER DESIRES:
+${strategyContext.desires?.slice(0, 3).map(d => `- ${d}`).join('\n') || 'Help customers achieve their goals'}
+
+VALUE PROPOSITION:
+${strategyContext.offer || 'Create compelling value'}
+
+${messagingAngle ? `MESSAGING ANGLE: ${messagingAngle}` : ''}
+${hook ? `HOOK: ${hook}` : ''}
+${headline ? `HEADLINE: ${headline}` : ''}
+${cta ? `CALL-TO-ACTION: ${cta}` : ''}
+
+${platforms?.length ? `PLATFORMS: ${platforms.join(', ')}` : ''}
+
+${notes ? `ADDITIONAL NOTES: ${notes}` : ''}
+
+Create engaging, on-brand creative that drives action while maintaining brand consistency.`;
+}
+
+/**
+ * Generate task description
+ */
+function generateTaskDescription(taskType, assetType, strategyContext) {
+  const businessName = strategyContext.businessName || 'the project';
+  const industry = strategyContext.industry ? ` in the ${strategyContext.industry} industry` : '';
+
+  switch (taskType) {
+    case 'graphic_design':
+      return `Design ${assetType?.replace(/_/g, ' ')} assets for ${businessName}${industry}. Follow the brand guidelines and creative brief provided.`;
+    case 'video_editing':
+      return `Create video content for ${businessName}${industry}. Focus on engagement and conversions while maintaining brand consistency.`;
+    case 'landing_page_design':
+      return `Design the landing page for ${businessName}${industry}. Focus on conversion optimization and user experience.`;
+    case 'landing_page_development':
+      return `Develop the landing page for ${businessName}${industry}. Ensure responsive design and integration with marketing tools.`;
+    case 'content_writing':
+      return `Write compelling content for ${businessName}${industry}. Follow the messaging strategy and brand voice.`;
+    default:
+      return `Complete the ${taskType?.replace(/_/g, ' ')} task for ${businessName}.`;
+  }
+}
+
+/**
+ * Calculate due date based on task type
+ */
+function calculateDueDate(taskType) {
+  const daysToAdd = {
+    graphic_design: 3,
+    video_editing: 5,
+    landing_page_design: 5,
+    landing_page_development: 7,
+    content_writing: 2
+  };
+
+  const dueDate = new Date();
+  dueDate.setDate(dueDate.getDate() + (daysToAdd[taskType] || 3));
+  return dueDate;
+}
+
+/**
+ * Send task assignment notifications
+ */
+async function sendTaskAssignmentNotifications(tasks, project) {
+  const tasksByUser = {};
+
+  // Group tasks by assigned user
+  for (const task of tasks) {
+    if (task.assignedTo) {
+      if (!tasksByUser[task.assignedTo]) {
+        tasksByUser[task.assignedTo] = [];
+      }
+      tasksByUser[task.assignedTo].push(task);
+    }
+  }
+
+  // Send notifications
+  for (const [userId, userTasks] of Object.entries(tasksByUser)) {
+    const taskCount = userTasks.length;
+    const projectDisplay = project.projectName || project.businessName;
+
+    await Notification.create({
+      recipient: userId,
+      type: 'task_assigned',
+      title: 'New Tasks Assigned',
+      message: `You have been assigned ${taskCount} new task${taskCount > 1 ? 's' : ''} for project "${projectDisplay}".`,
+      projectId: project._id
+    });
+  }
+}
+
+/**
+ * Get all tasks for a project
+ */
+async function getTasksByProject(projectId, filters = {}) {
+  const query = { projectId };
+
+  if (filters.status) {
+    query.status = filters.status;
+  }
+  if (filters.taskType) {
+    query.taskType = filters.taskType;
+  }
+  if (filters.assignedTo) {
+    query.assignedTo = filters.assignedTo;
+  }
+  if (filters.assignedRole) {
+    query.assignedRole = filters.assignedRole;
+  }
+
+  const tasks = await Task.find(query)
+    .populate('assignedTo', 'name email role')
+    .populate('assignedBy', 'name email')
+    .populate('reviewedBy', 'name email')
+    .populate('testerReviewedBy', 'name email')
+    .populate('marketerApprovedBy', 'name email')
+    .sort({ createdAt: -1 });
+
+  return tasks;
+}
+
+/**
+ * Get tasks for a user by role
+ */
+async function getTasksByUser(userId, role, filters = {}) {
+  const query = { assignedTo: userId };
+
+  if (filters.status) {
+    query.status = filters.status;
+  }
+  if (filters.taskType) {
+    query.taskType = filters.taskType;
+  }
+
+  const tasks = await Task.find(query)
+    .populate('projectId', 'projectName businessName')
+    .populate('assignedBy', 'name email')
+    .sort({ priority: -1, dueDate: 1 });
+
+  return tasks;
+}
+
+/**
+ * Update task status and handle workflow transitions
+ */
+async function updateTaskStatus(taskId, newStatus, userId, notes = '') {
+  const task = await Task.findById(taskId);
+
+  if (!task) {
+    throw new Error('Task not found');
+  }
+
+  const oldStatus = task.status;
+  task.status = newStatus;
+  task.addRevision(userId, notes, oldStatus, newStatus);
+
+  // Update timestamps based on status
+  if (newStatus === 'in_progress' && !task.startedAt) {
+    task.startedAt = new Date();
+  }
+  if (newStatus === 'submitted' || newStatus === 'design_submitted' || newStatus === 'development_submitted') {
+    task.submittedAt = new Date();
+  }
+  if (newStatus === 'final_approved') {
+    task.completedAt = new Date();
+  }
+  if (newStatus === 'rejected') {
+    task.rejectionNote = notes;
+    task.reviewedAt = new Date();
+  }
+
+  await task.save();
+  return task;
+}
+
+module.exports = {
+  generateTasksFromStrategy,
+  getTasksByProject,
+  getTasksByUser,
+  updateTaskStatus,
+  buildStrategyContext,
+  generateAIPrompt,
+  SOP_REFERENCES
+};

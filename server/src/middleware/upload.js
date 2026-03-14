@@ -1,5 +1,5 @@
 const multer = require('multer');
-const { brandAssetsStorage, avatarStorage } = require('../config/cloudinary');
+const { brandAssetsStorage, avatarStorage, taskFilesStorage } = require('../config/cloudinary');
 
 // File filter for brand assets
 const brandAssetsFilter = (req, file, cb) => {
@@ -9,6 +9,29 @@ const brandAssetsFilter = (req, file, cb) => {
     cb(null, true);
   } else {
     cb(new Error('Invalid file type. Only images, PDFs, and documents are allowed.'), false);
+  }
+};
+
+// File filter for task deliverables (images, videos, design files)
+const taskFilesFilter = (req, file, cb) => {
+  const allowedTypes = [
+    // Images
+    'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+    // Videos
+    'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm',
+    // Documents
+    'application/pdf',
+    // Design files
+    'application/postscript', 'image/vnd.adobe.photoshop', 'application/illustrator',
+    'application/x-sketch', 'application/x-figma',
+    // Archives
+    'application/zip', 'application/x-zip-compressed'
+  ];
+
+  if (allowedTypes.includes(file.mimetype) || file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Invalid file type. Images, videos, documents, and design files are allowed.'), false);
   }
 };
 
@@ -40,6 +63,15 @@ const uploadAvatar = multer({
     fileSize: 2 * 1024 * 1024 // 2MB max
   }
 }).single('avatar');
+
+// Multer upload for task deliverables
+const uploadTaskFiles = multer({
+  storage: taskFilesStorage,
+  fileFilter: taskFilesFilter,
+  limits: {
+    fileSize: 100 * 1024 * 1024 // 100MB max for videos
+  }
+}).array('files', 20); // Max 20 files per task
 
 // Error handling wrapper
 const handleUpload = (upload) => {
@@ -76,5 +108,6 @@ const handleUpload = (upload) => {
 module.exports = {
   uploadBrandAssets,
   uploadAvatar,
+  uploadTaskFiles,
   handleUpload
 };

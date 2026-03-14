@@ -1,28 +1,78 @@
 const express = require('express');
 const router = express.Router();
 const { protect, authorize } = require('../middleware/auth');
+const { handleUpload, uploadTaskFiles } = require('../middleware/upload');
 const {
   getMyTasks,
   getAllTasks,
   getTask,
-  updateTaskStatus,
+  getProjectTasks,
+  createTask,
+  updateTask,
+  assignTask,
+  testerReview,
+  marketerReview,
+  uploadFiles,
+  getPendingReviewTasks,
+  getPendingMarketerApproval,
+  generateTasks,
   updateTaskContent,
-  getTeamMembers,
-  uploadTaskFiles
+  getTeamMembers
 } = require('../controllers/taskController');
 
 // All routes require authentication
 router.use(protect);
 
-// Routes for assigned user
+// ===========================================
+// Task Management Routes
+// ===========================================
+
+// Get tasks for current user
 router.get('/my-tasks', getMyTasks);
-router.put('/:taskId/status', updateTaskStatus);
-router.put('/:taskId/content', updateTaskContent);
-router.post('/:taskId/upload', uploadTaskFiles);
+
+// Get team members for assignment
 router.get('/team-members', getTeamMembers);
 
-// Routes for PM/admin
-router.get('/', authorize('admin', 'manager', 'performance_marketer'), getAllTasks);
+// Get tasks pending tester review (Testers/Admin only)
+router.get('/pending-review', authorize('tester', 'admin'), getPendingReviewTasks);
+
+// Get tasks pending marketer approval (Performance Marketers/Admin only)
+router.get('/pending-marketer-approval', authorize('performance_marketer', 'admin'), getPendingMarketerApproval);
+
+// Get all tasks (Admin/Performance Marketer only)
+router.get('/', authorize('admin', 'performance_marketer'), getAllTasks);
+
+// Get tasks for a specific project
+router.get('/project/:projectId', getProjectTasks);
+
+// Generate tasks from strategy (Admin only)
+router.post('/generate/:projectId', authorize('admin'), generateTasks);
+
+// Create new task (Admin/Performance Marketer only)
+router.post('/', authorize('admin', 'performance_marketer'), createTask);
+
+// Get single task
 router.get('/:taskId', getTask);
+
+// Update task (Assigned user only)
+router.put('/:taskId', updateTask);
+
+// Update task status
+router.put('/:taskId/status', updateTask);
+
+// Assign task to user (Admin/Performance Marketer only)
+router.put('/:taskId/assign', authorize('admin', 'performance_marketer'), assignTask);
+
+// Tester review - approve/reject (Tester/Admin only)
+router.put('/:taskId/tester-review', authorize('tester', 'admin'), testerReview);
+
+// Marketer review - approve/reject (Performance Marketer/Admin only)
+router.put('/:taskId/marketer-review', authorize('performance_marketer', 'admin'), marketerReview);
+
+// Upload files to task
+router.post('/:taskId/files', handleUpload(uploadTaskFiles), uploadFiles);
+
+// Update task content
+router.put('/:taskId/content', updateTaskContent);
 
 module.exports = router;

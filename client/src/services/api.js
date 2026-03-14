@@ -148,11 +148,39 @@ export const creativeService = {
 
 // Task service
 export const taskService = {
+  // Get tasks for current user
   getMyTasks: (params) => api.get('/tasks/my-tasks', { params }),
+  // Get all tasks (admin/PM)
   getAllTasks: (params) => api.get('/tasks', { params }),
+  // Get tasks for a project
+  getProjectTasks: (projectId, params) => api.get(`/tasks/project/${projectId}`, { params }),
+  // Get single task
   getTask: (taskId) => api.get(`/tasks/${taskId}`),
+  // Create task
+  createTask: (data) => api.post('/tasks', data),
+  // Update task
+  updateTask: (taskId, data) => api.put(`/tasks/${taskId}`, data),
+  // Update task status
   updateTaskStatus: (taskId, data) => api.put(`/tasks/${taskId}/status`, data),
+  // Update task content
   updateTaskContent: (taskId, data) => api.put(`/tasks/${taskId}/content`, data),
+  // Assign task
+  assignTask: (taskId, data) => api.put(`/tasks/${taskId}/assign`, data),
+  // Tester review
+  testerReview: (taskId, data) => api.put(`/tasks/${taskId}/tester-review`, data),
+  // Marketer review
+  marketerReview: (taskId, data) => api.put(`/tasks/${taskId}/marketer-review`, data),
+  // Upload files
+  uploadFiles: (taskId, formData) => api.post(`/tasks/${taskId}/files`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  // Get pending review tasks (tester)
+  getPendingReview: () => api.get('/tasks/pending-review'),
+  // Get pending marketer approval
+  getPendingMarketerApproval: () => api.get('/tasks/pending-marketer-approval'),
+  // Generate tasks from strategy
+  generateTasks: (projectId) => api.post(`/tasks/generate/${projectId}`),
+  // Get team members
   getTeamMembers: () => api.get('/tasks/team-members'),
 };
 
@@ -162,6 +190,14 @@ export const strategyService = {
   markReviewed: (projectId, notes) => api.put(`/strategy/${projectId}/review`, { notes }),
   getPendingReview: () => api.get('/strategy/pending-review'),
   getStats: () => api.get('/strategy/stats'),
+};
+
+// Strategy Summary service
+export const strategySummaryService = {
+  getSummary: (projectId) => api.get(`/projects/${projectId}/strategy-summary`),
+  getTextSummary: (projectId) => api.get(`/projects/${projectId}/strategy-summary/text`),
+  getPdfContent: (projectId) => api.get(`/projects/${projectId}/strategy-summary/pdf`),
+  getTaskContext: (projectId) => api.get(`/projects/${projectId}/strategy-summary/context`),
 };
 
 export default api;

@@ -143,7 +143,7 @@ const STATIC_MARKET_RESEARCH = {
   painPoints: ['Low conversion rates', 'High customer acquisition cost', 'Poor lead quality'],
   desires: ['Increase sales', 'Better ROI', 'Automated marketing'],
   existingPurchases: ['CRM software', 'Email marketing tool', 'Analytics platform'],
-  competitors: [{ name: 'Competitor A', strengths: ['Brand recognition'], weaknesses: ['High price'] }],
+  competitors: 'Competitor A has strong brand recognition but high prices. Competitor B offers budget solutions but lacks features.',
   completionPercentage: 50,
   isCompleted: false
 };
@@ -215,7 +215,7 @@ export default function MarketResearchPage() {
       painPoints: [],
       desires: [],
       existingPurchases: [],
-      competitors: '',
+      competitorsText: '',
     },
   });
 
@@ -258,7 +258,7 @@ export default function MarketResearchPage() {
           setValue('painPoints', dataRes.data.painPoints || []);
           setValue('desires', dataRes.data.desires || []);
           setValue('existingPurchases', dataRes.data.existingPurchases || []);
-          setValue('competitors', dataRes.data.competitors || []);
+          setValue('competitorsText', dataRes.data.competitors || '');
           setIsCompleted(dataRes.data.isCompleted);
         }
       }
@@ -310,8 +310,14 @@ export default function MarketResearchPage() {
         }
       } else {
         const { marketResearchService } = await import('@/services/api');
-        await marketResearchService.upsert(projectId, {
+        // Transform competitorsText to competitors for backend
+        const submitData = {
           ...formData,
+          competitors: formData.competitorsText || '',
+        };
+        delete submitData.competitorsText;
+        await marketResearchService.upsert(projectId, {
+          ...submitData,
           isCompleted: markComplete,
         });
         toast.success(markComplete ? 'Market research completed!' : 'Progress saved!');
@@ -368,7 +374,7 @@ export default function MarketResearchPage() {
       painPoints.length > 0,
       desires.length > 0,
       existingPurchases.length > 0,
-      watch('competitors'),
+      watch('competitorsText'),
     ];
     const filled = fields.filter(f => f).length;
     return Math.round((filled / fields.length) * 100);
@@ -694,7 +700,7 @@ export default function MarketResearchPage() {
             <Textarea
               placeholder="Describe your competitors and their strategies..."
               rows={4}
-              {...register('competitors.0.name')}
+              {...register('competitorsText')}
             />
           </CardBody>
         </Card>

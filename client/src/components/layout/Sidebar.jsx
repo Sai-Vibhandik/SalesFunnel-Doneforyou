@@ -18,46 +18,86 @@ import {
   User,
   Users,
   CheckSquare,
+  ClipboardCheck,
+  FileCheck,
+  BookOpen,
+  Briefcase,
+  Layers,
+  CheckCircle,
 } from 'lucide-react';
-
-// Navigation items for Admin - Only Dashboard, Projects (list only), Team Management, Settings
-const adminNavigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Projects', href: '/projects', icon: FolderKanban, listOnly: true },
-  { name: 'Team Management', href: '/team', icon: Users },
-  { name: 'Settings', href: '/settings', icon: Settings },
-];
-
-// Navigation items for Performance Marketer and other team roles
-const teamNavigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'My Projects', href: '/projects', icon: FolderKanban },
-  { name: 'Tasks', href: '/tasks', icon: CheckSquare },
-  { name: 'Market Research', href: '/market-research', icon: Search },
-  { name: 'Offer Engineering', href: '/offer-engineering', icon: Gift },
-  { name: 'Traffic Strategy', href: '/traffic-strategy', icon: TrendingUp },
-  { name: 'Landing Pages', href: '/landing-pages', icon: FileText },
-  { name: 'Creative Strategy', href: '/creative-strategy', icon: Lightbulb },
-  { name: 'Settings', href: '/settings', icon: Settings },
-];
 
 // Role labels for display
 const roleLabels = {
   admin: 'Admin',
   performance_marketer: 'Performance Marketer',
   ui_ux_designer: 'UI/UX Designer',
-  graphic_designer: 'Graphic Designer',
+  graphic_designer: 'Designer',
   developer: 'Developer',
   tester: 'Tester',
+};
+
+// Navigation configurations per role
+const navigationByRole = {
+  // ADMIN SIDEBAR
+  admin: [
+    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { name: 'Clients', href: '/clients', icon: Briefcase },
+    { name: 'Projects', href: '/projects', icon: FolderKanban },
+    { name: 'Team Management', href: '/team', icon: Users },
+    { name: 'SOP Library', href: '/sop-library', icon: BookOpen },
+    { name: 'Reports', href: '/reports', icon: BarChart3 },
+    { name: 'Settings', href: '/settings', icon: Settings },
+  ],
+
+  // PERFORMANCE MARKETER SIDEBAR
+  performance_marketer: [
+    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { name: 'Projects', href: '/projects', icon: FolderKanban },
+    { name: 'Market Research', href: '/market-research', icon: Search },
+    { name: 'Offer Engineering', href: '/offer-engineering', icon: Gift },
+    { name: 'Traffic Strategy', href: '/traffic-strategy', icon: TrendingUp },
+    { name: 'Landing Pages', href: '/landing-pages', icon: FileText },
+    { name: 'Creative Strategy', href: '/creative-strategy', icon: Lightbulb },
+    { name: 'Creative Approvals', href: '/tasks/approval', icon: CheckCircle },
+    { name: 'Reports', href: '/reports', icon: BarChart3 },
+  ],
+
+  // GRAPHIC DESIGNER SIDEBAR
+  graphic_designer: [
+    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { name: 'My Projects', href: '/projects', icon: FolderKanban },
+    { name: 'My Tasks', href: '/tasks', icon: CheckSquare },
+  ],
+
+  // UI/UX DESIGNER SIDEBAR
+  ui_ux_designer: [
+    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { name: 'My Projects', href: '/projects', icon: FolderKanban },
+    { name: 'My Tasks', href: '/tasks', icon: CheckSquare },
+  ],
+
+  // DEVELOPER SIDEBAR
+  developer: [
+    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { name: 'My Projects', href: '/projects', icon: FolderKanban },
+    { name: 'My Tasks', href: '/tasks', icon: CheckSquare },
+  ],
+
+  // TESTER SIDEBAR
+  tester: [
+    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { name: 'Assets Awaiting Review', href: '/tasks/review', icon: ClipboardCheck },
+    { name: 'Approved Assets', href: '/tasks/approved', icon: FileCheck },
+  ],
 };
 
 export default function Sidebar({ collapsed, setCollapsed }) {
   const location = useLocation();
   const { user, logout } = useAuth();
 
-  // Select navigation based on role
-  const isAdmin = user?.role === 'admin';
-  const navigation = isAdmin ? adminNavigation : teamNavigation;
+  // Get navigation based on user role
+  const role = user?.role || 'graphic_designer';
+  const navigation = navigationByRole[role] || navigationByRole.graphic_designer;
 
   return (
     <aside
@@ -143,7 +183,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
                 {user?.name || 'User'}
               </p>
               <p className="text-xs text-gray-500 truncate">
-                {roleLabels[user?.role] || user?.role}
+                {roleLabels[role] || role}
               </p>
             </div>
             <button
