@@ -1143,7 +1143,7 @@ export default function TaskDetailPage() {
                   onClick={() => setShowModal(true)}
                 >
                   <Send className="w-4 h-4 mr-2" />
-                  {canResubmitTask() ? 'Resubmit for Review' : 'Submit for Review'}
+                  {canResubmitTask() ? 'Submit for Review' : 'Submit for Review'}
                 </Button>
               )}
 

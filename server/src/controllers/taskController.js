@@ -996,6 +996,83 @@ exports.getProjectCompletedAssets = async (req, res, next) => {
   }
 };
 
+// @desc    Get all tasks for a project (for Performance Marketer tracking)
+// @route   GET /api/tasks/project/:projectId/all
+// @access  Private (Performance Marketer, Admin)
+exports.getProjectAllTasks = async (req, res, next) => {
+  try {
+    const { projectId } = req.params;
+
+    // Check project access
+    const { project, error } = await checkProjectAccess(projectId, req.user);
+    if (error) {
+      return res.status(error.status).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    // Define task types for creatives and landing pages
+    const creativeTaskTypes = ['graphic_design', 'video_editing', 'content_creation'];
+    const landingPageTaskTypes = ['landing_page_design', 'landing_page_development'];
+
+    // Get ALL tasks for this project (creatives and landing pages)
+    const tasks = await Task.find({
+      projectId,
+      taskType: { $in: [...creativeTaskTypes, ...landingPageTaskTypes] }
+    })
+      .populate('assignedTo', 'name email role')
+      .populate('assignedBy', 'name email')
+      .populate('testerReviewedBy', 'name email')
+      .populate('marketerApprovedBy', 'name email')
+      .sort({ createdAt: 1 });
+
+    // Group tasks by type
+    const creatives = tasks.filter(t => creativeTaskTypes.includes(t.taskType));
+    const landingPages = tasks.filter(t => landingPageTaskTypes.includes(t.taskType));
+
+    // Separate by status for easy frontend filtering
+    const pendingMarketerReview = tasks.filter(t =>
+      ['content_approved', 'design_approved', 'development_approved', 'approved_by_tester'].includes(t.status)
+    );
+    const approved = tasks.filter(t =>
+      ['final_approved', 'content_final_approved'].includes(t.status)
+    );
+    const inProgress = tasks.filter(t =>
+      ['todo', 'in_progress', 'content_pending', 'content_submitted', 'design_pending', 'design_submitted', 'development_pending', 'development_submitted'].includes(t.status)
+    );
+    const rejected = tasks.filter(t =>
+      ['rejected', 'content_rejected', 'design_rejected'].includes(t.status)
+    );
+
+    res.status(200).json({
+      success: true,
+      count: tasks.length,
+      data: {
+        project: {
+          _id: project._id,
+          projectName: project.projectName,
+          businessName: project.businessName,
+          industry: project.industry
+        },
+        tasks,
+        groupedTasks: {
+          creatives,
+          landingPages
+        },
+        byStatus: {
+          pendingMarketerReview,
+          approved,
+          inProgress,
+          rejected
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Generate tasks for a project (trigger manually)
 // @route   POST /api/tasks/generate/:projectId
 // @access  Private (Admin only)

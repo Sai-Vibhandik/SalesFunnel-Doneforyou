@@ -119,6 +119,9 @@ exports.completeStage = async (projectId, stageKey, completedBy = null) => {
 
   if (currentIndex < stageOrder.length - 1) {
     project.currentStage = currentIndex + 2; // +2 because stage starts at 1
+  } else {
+    // All stages completed - set to the last stage (creativeStrategy)
+    project.currentStage = stageOrder.length; // 6
   }
 
   // Calculate overall progress

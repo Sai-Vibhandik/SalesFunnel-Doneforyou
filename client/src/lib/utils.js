@@ -49,6 +49,23 @@ export function getStageName(stageKey) {
   return names[stageKey] || stageKey;
 }
 
+// Get the current stage based on completion status (not the stored currentStage number)
+export function getCurrentStage(stages) {
+  if (!stages) return { key: 'onboarding', name: 'Customer Onboarding', isCompleted: false };
+
+  const stageOrder = ['onboarding', 'marketResearch', 'offerEngineering', 'trafficStrategy', 'landingPage', 'creativeStrategy'];
+
+  // Find the first incomplete stage
+  for (const key of stageOrder) {
+    if (!stages[key]?.isCompleted) {
+      return { key, name: getStageName(key), isCompleted: false };
+    }
+  }
+
+  // All stages completed
+  return { key: 'creativeStrategy', name: 'Creative Strategy Execution', isCompleted: true };
+}
+
 export function calculateProgress(stages) {
   if (!stages) return 0;
   const stageKeys = Object.keys(stages);

@@ -291,14 +291,14 @@ export default function TeamAssignmentPage() {
           <Users className="w-4 h-4 mr-2" />
           Save Team Assignment
         </Button>
-        {hasPerformanceMarketer && !project.isActive && (
+        {/* {hasPerformanceMarketer && !project.isActive && (
           <Button
             className="bg-green-600 hover:bg-green-700"
             onClick={handleActivate}
           >
             Activate Project
           </Button>
-        )}
+        )} */}
       </div>
     </div>
   );

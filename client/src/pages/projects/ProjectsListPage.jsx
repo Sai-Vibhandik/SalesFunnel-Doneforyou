@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardBody, CardHeader, Button, Badge, ProgressBar, Spinner, EmptyState } from '@/components/ui';
 import { FolderKanban, Plus, Search, Filter, Trash2, MoreVertical } from 'lucide-react';
-import { formatDate, getStageName, getStatusColor } from '@/lib/utils';
+import { formatDate, getStageName, getStatusColor, getCurrentStage } from '@/lib/utils';
 
 // Role labels for display
 const roleLabels = {
@@ -231,9 +231,9 @@ export default function ProjectsListPage() {
                         </span>
                       )}
                     </div>
-                    <Badge variant={project.status === 'active' ? 'success' : 'default'}>
+                    {/* <Badge variant={project.status === 'active' ? 'success' : 'default'}>
                       {project.status}
-                    </Badge>
+                    </Badge> */}
                   </div>
 
                   <div className="space-y-3">
@@ -252,8 +252,10 @@ export default function ProjectsListPage() {
 
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-600">Current Stage</span>
-                      <span className="font-medium text-gray-900">
-                        {getStageName(project.stages ? Object.keys(project.stages)[project.currentStage - 1] : 'onboarding')}
+                      <span className={`font-medium ${getCurrentStage(project.stages).isCompleted ? 'text-green-600' : 'text-gray-900'}`}>
+                        {getCurrentStage(project.stages).isCompleted
+                          ? 'All Stages Completed'
+                          : getCurrentStage(project.stages).name}
                       </span>
                     </div>
 

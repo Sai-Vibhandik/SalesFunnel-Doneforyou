@@ -15,8 +15,8 @@ import {
   Play,
   ChevronRight,
   AlertCircle,
-  FileCheck,
   Eye,
+  FileCheck,
 } from 'lucide-react';
 import { formatDate, getStageName } from '@/lib/utils';
 
@@ -32,7 +32,7 @@ const STAGE_NAMES = {
   marketResearch: 'Market Research',
   offerEngineering: 'Offer Engineering',
   trafficStrategy: 'Traffic Strategy',
-  landingPage: 'Landing Page',
+  landingPage: 'Landing Pages',
   creativeStrategy: 'Creative Strategy',
 };
 
@@ -44,18 +44,21 @@ const STAGE_PATHS = {
   creativeStrategy: '/creative-strategy',
 };
 
+// Workflow stages in order (excluding onboarding which is auto-completed)
+const WORKFLOW_STAGES = ['marketResearch', 'offerEngineering', 'trafficStrategy', 'landingPage', 'creativeStrategy'];
+
 export default function PerformanceMarketerDashboard({ user }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [projects, setProjects] = useState([]);
-  const [projectAssets, setProjectAssets] = useState({});
+  const [projectTaskCounts, setProjectTaskCounts] = useState({});
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
     completed: 0,
     inProgress: 0,
-    totalCompletedAssets: 0,
+    pendingApproval: 0,
   });
 
   useEffect(() => {
@@ -88,31 +91,35 @@ export default function PerformanceMarketerDashboard({ user }) {
 
       console.log('Stats:', { total, active, completed, inProgress });
 
-      setStats({ total, active, completed, inProgress, totalCompletedAssets: 0 });
+      setStats({ total, active, completed, inProgress, pendingApproval: 0 });
 
-      // Fetch completed assets count for each project
-      const assetsPromises = assignedProjects.map(async (project) => {
+      // Fetch pending approval count and task counts per project
+      if (user?.role === 'performance_marketer') {
         try {
-          const assetsRes = await taskService.getProjectCompletedAssets(project._id);
-          return { projectId: project._id, count: assetsRes.data?.count || 0 };
+          const pendingRes = await taskService.getPendingMarketerApproval();
+          setStats(prev => ({ ...prev, pendingApproval: pendingRes.data?.length || 0 }));
+
+          // Fetch task counts for each active project
+          const taskCounts = {};
+          for (const project of assignedProjects.filter(p => p.isActive && p.status === 'active')) {
+            try {
+              const tasksRes = await taskService.getProjectAllTasks(project._id);
+              const data = tasksRes.data;
+              taskCounts[project._id] = {
+                total: data.tasks?.length || 0,
+                pending: data.byStatus?.pendingMarketerReview?.length || 0,
+                inProgress: data.byStatus?.inProgress?.length || 0,
+                approved: data.byStatus?.approved?.length || 0,
+              };
+            } catch (err) {
+              console.error(`Failed to fetch tasks for project ${project._id}:`, err);
+            }
+          }
+          setProjectTaskCounts(taskCounts);
         } catch (err) {
-          console.error(`Failed to fetch assets for project ${project._id}:`, err);
-          return { projectId: project._id, count: 0 };
+          console.error('Failed to fetch pending approvals:', err);
         }
-      });
-
-      const assetsResults = await Promise.all(assetsPromises);
-      const assetsMap = {};
-      let totalCompletedAssets = 0;
-
-      assetsResults.forEach(result => {
-        const count = Number(result.count) || 0;
-        assetsMap[result.projectId] = count;
-        totalCompletedAssets += count;
-      });
-
-      setProjectAssets(assetsMap);
-      setStats(prev => ({ ...prev, totalCompletedAssets }));
+      }
 
     } catch (err) {
       console.error('Failed to load projects:', err);
@@ -124,35 +131,16 @@ export default function PerformanceMarketerDashboard({ user }) {
   };
 
   const getNextStage = (project) => {
-    const stageKeys = ['onboarding', 'marketResearch', 'offerEngineering', 'trafficStrategy', 'landingPage', 'creativeStrategy'];
-
-    for (let i = 1; i < stageKeys.length; i++) {
-      const key = stageKeys[i];
-      const prevKey = stageKeys[i - 1];
-
-      // Check if previous stage is completed
-      const prevCompleted = project.stages?.[prevKey]?.isCompleted;
-
-      if (!project.stages?.[key]?.isCompleted && prevCompleted) {
-        return { key, name: STAGE_NAMES[key], index: i };
-      }
+    // Check if ALL workflow stages are completed
+    const allCompleted = WORKFLOW_STAGES.every(key => project.stages?.[key]?.isCompleted);
+    if (allCompleted) {
+      return null; // All stages completed
     }
 
-    // All stages completed or find first incomplete accessible stage
-    for (let i = 1; i < stageKeys.length; i++) {
-      const key = stageKeys[i];
+    // Find the first incomplete stage in workflow order
+    for (const key of WORKFLOW_STAGES) {
       if (!project.stages?.[key]?.isCompleted) {
-        // Check if we can access this stage
-        let canAccess = true;
-        for (let j = 1; j < i; j++) {
-          if (!project.stages?.[stageKeys[j]]?.isCompleted) {
-            canAccess = false;
-            break;
-          }
-        }
-        if (canAccess) {
-          return { key, name: STAGE_NAMES[key], index: i };
-        }
+        return { key, name: STAGE_NAMES[key] };
       }
     }
 
@@ -160,9 +148,36 @@ export default function PerformanceMarketerDashboard({ user }) {
   };
 
   const getStageProgress = (project) => {
-    const stageKeys = ['onboarding', 'marketResearch', 'offerEngineering', 'trafficStrategy', 'landingPage', 'creativeStrategy'];
-    const completed = stageKeys.filter(key => project.stages?.[key]?.isCompleted).length;
-    return { completed, total: 6 };
+    // Count completed workflow stages (excluding onboarding)
+    const completed = WORKFLOW_STAGES.filter(key => project.stages?.[key]?.isCompleted === true).length;
+    return { completed, total: WORKFLOW_STAGES.length };
+  };
+
+  // Check if all stages are completed
+  const areAllStagesCompleted = (project) => {
+    return WORKFLOW_STAGES.every(key => project.stages?.[key]?.isCompleted === true);
+  };
+
+  // Get stage status for display
+  const getStageStatus = (project, stageKey) => {
+    const stageIndex = WORKFLOW_STAGES.indexOf(stageKey);
+    // Ensure isCompleted is explicitly checked (handle undefined/null)
+    const isCompleted = project.stages?.[stageKey]?.isCompleted === true;
+
+    // If this stage is completed, always return 'completed'
+    if (isCompleted) return 'completed';
+
+    // Check if all previous stages are completed
+    let canAccess = true;
+    for (let i = 0; i < stageIndex; i++) {
+      if (project.stages?.[WORKFLOW_STAGES[i]]?.isCompleted !== true) {
+        canAccess = false;
+        break;
+      }
+    }
+
+    if (canAccess) return 'active';
+    return 'locked';
   };
 
   if (loading) {
@@ -275,11 +290,11 @@ export default function PerformanceMarketerDashboard({ user }) {
           <CardBody className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Completed Assets</p>
-                <p className="text-2xl font-bold text-teal-600">{stats.totalCompletedAssets || 0}</p>
+                <p className="text-sm text-gray-500">Pending Approval</p>
+                <p className="text-2xl font-bold text-yellow-600">{stats.pendingApproval || 0}</p>
               </div>
-              <div className="p-3 bg-teal-100 rounded-lg">
-                <FileCheck className="w-6 h-6 text-teal-600" />
+              <div className="p-3 bg-yellow-100 rounded-lg">
+                <Eye className="w-6 h-6 text-yellow-600" />
               </div>
             </div>
           </CardBody>
@@ -360,6 +375,50 @@ export default function PerformanceMarketerDashboard({ user }) {
                           />
                         </div>
 
+                        {/* Stages Visual Progress */}
+                        <div className="mb-4">
+                          <div className="flex items-center justify-between">
+                            {WORKFLOW_STAGES.map((key, index) => {
+                              const status = getStageStatus(project, key);
+                              const isStageComplete = project.stages?.[key]?.isCompleted === true;
+                              const Icon = STAGE_ICONS[key];
+                              return (
+                                <div key={key} className="flex flex-col items-center flex-1">
+                                  <div
+                                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${
+                                      status === 'completed'
+                                        ? 'bg-green-500 text-white'
+                                        : status === 'active'
+                                        ? 'bg-blue-500 text-white'
+                                        : 'bg-gray-200 text-gray-500'
+                                    }`}
+                                    title={STAGE_NAMES[key]}
+                                  >
+                                    {status === 'completed' ? (
+                                      <CheckCircle className="w-4 h-4" />
+                                    ) : (
+                                      <span>{index + 1}</span>
+                                    )}
+                                  </div>
+                                  <span className={`text-xs mt-1 text-center hidden md:block ${
+                                    status === 'completed' ? 'text-green-600 font-medium' : 'text-gray-600'
+                                  }`}>
+                                    {STAGE_NAMES[key].split(' ')[0]}
+                                  </span>
+                                  {index < WORKFLOW_STAGES.length - 1 && (
+                                    <div
+                                      className={`h-0.5 flex-1 mx-1 ${
+                                        isStageComplete ? 'bg-green-500' : 'bg-gray-200'
+                                      }`}
+                                      style={{ position: 'relative', top: '-12px' }}
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
                         {/* Next Stage Action */}
                         {nextStage ? (
                           <div className="bg-blue-50 rounded-lg p-4">
@@ -398,26 +457,54 @@ export default function PerformanceMarketerDashboard({ user }) {
                           </div>
                         )}
 
-                        {/* Completed Assets */}
-                        {(projectAssets[project._id] || 0) > 0 && (
-                          <div className="mt-3 flex items-center justify-between p-3 bg-teal-50 rounded-lg">
-                            <div className="flex items-center gap-2">
-                              <FileCheck className="w-5 h-5 text-teal-600" />
-                              <span className="text-sm text-teal-800">
-                                <span className="font-medium">{projectAssets[project._id] || 0}</span> completed assets
-                              </span>
+                        {/* Task Status Summary */}
+                        {projectTaskCounts[project._id] && (
+                          <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium text-gray-700">Task Status</span>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/projects/${project._id}/assets`);
+                                }}
+                              >
+                                <Eye className="w-4 h-4 mr-1" />
+                                View All
+                              </Button>
                             </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/projects/${project._id}/assets`);
-                              }}
-                            >
-                              <Eye className="w-4 h-4 mr-1" />
-                              View
-                            </Button>
+                            <div className="grid grid-cols-4 gap-2 text-xs">
+                              <div className="text-center">
+                                <p className="font-medium text-gray-900">{projectTaskCounts[project._id]?.total || 0}</p>
+                                <p className="text-gray-500">Total</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="font-medium text-yellow-600">{projectTaskCounts[project._id]?.pending || 0}</p>
+                                <p className="text-gray-500">Pending</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="font-medium text-blue-600">{projectTaskCounts[project._id]?.inProgress || 0}</p>
+                                <p className="text-gray-500">In Progress</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="font-medium text-green-600">{projectTaskCounts[project._id]?.approved || 0}</p>
+                                <p className="text-gray-500">Approved</p>
+                              </div>
+                            </div>
+                            {projectTaskCounts[project._id]?.pending > 0 && (
+                              <div className="mt-2 pt-2 border-t border-gray-200">
+                                <Button
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/projects/${project._id}/assets?tab=pending`);
+                                  }}
+                                >
+                                  Review Pending Tasks
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         )}
 
@@ -432,8 +519,8 @@ export default function PerformanceMarketerDashboard({ user }) {
                               size="sm"
                               onClick={() => navigate(`/projects/${project._id}/assets`)}
                             >
-                              <FileCheck className="w-4 h-4 mr-1" />
-                              Assets
+                              <Eye className="w-4 h-4 mr-1" />
+                              All Tasks
                             </Button>
                             <Button
                               variant="ghost"

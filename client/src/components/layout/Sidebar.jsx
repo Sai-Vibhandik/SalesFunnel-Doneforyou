@@ -18,6 +18,7 @@ import {
   Briefcase,
   CheckCircle,
   PenTool,
+  Image,
 } from 'lucide-react';
 
 // Role labels for display
@@ -48,6 +49,7 @@ const navigationByRole = {
   performance_marketer: [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Projects', href: '/projects', icon: FolderKanban },
+    { name: 'Assets', href: '/assets', icon: Image },
     { name: 'Creative Approvals', href: '/tasks/approval', icon: CheckCircle },
   ],
 

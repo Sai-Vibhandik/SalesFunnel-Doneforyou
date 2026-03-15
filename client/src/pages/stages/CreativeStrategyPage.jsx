@@ -68,7 +68,10 @@ export default function CreativeStrategyPage() {
       });
 
       if (markComplete) {
-        navigate(`/tasks?projectId=${projectId}`);
+        // Show success message and navigate to project page
+        // Tasks are generated but assigned to team members, not the Performance Marketer
+        toast.success('Strategy completed successfully! Tasks have been assigned to the team.');
+        navigate(`/projects/${projectId}`);
       }
     } catch (error) {
       console.error('Creative strategy save error:', error);

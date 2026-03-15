@@ -8,6 +8,7 @@ const {
   getTask,
   getProjectTasks,
   getProjectCompletedAssets,
+  getProjectAllTasks,
   createTask,
   updateTask,
   assignTask,
@@ -60,6 +61,9 @@ router.get('/project/:projectId', getProjectTasks);
 
 // Get completed assets for a specific project
 router.get('/project/:projectId/completed', getProjectCompletedAssets);
+
+// Get all tasks for a project (for Performance Marketer tracking)
+router.get('/project/:projectId/all', authorize('performance_marketer', 'admin'), getProjectAllTasks);
 
 // Generate tasks from strategy (Admin only)
 router.post('/generate/:projectId', authorize('admin'), generateTasks);

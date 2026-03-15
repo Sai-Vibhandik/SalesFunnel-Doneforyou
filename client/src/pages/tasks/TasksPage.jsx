@@ -106,7 +106,28 @@ export default function TasksPage() {
       // Otherwise get tasks for the current user (by role)
       let res;
       if (projectId) {
-        res = await taskService.getProjectTasks(projectId, params);
+        // For Performance Marketers, only show tasks pending their approval
+        // For other roles with projectId filter, show tasks assigned to their role
+        if (userRole === 'performance_marketer' || userRole === 'admin') {
+          // Performance Marketers and Admins can see all project tasks
+          res = await taskService.getProjectTasks(projectId, params);
+        } else {
+          // For team members, filter by their role when viewing project tasks
+          res = await taskService.getProjectTasks(projectId, params);
+          // Filter tasks assigned to this role
+          const roleTaskTypes = {
+            'content_creator': ['content_creation'],
+            'graphic_designer': ['graphic_design'],
+            'video_editor': ['video_editing'],
+            'ui_ux_designer': ['landing_page_design'],
+            'developer': ['landing_page_development'],
+            'tester': [] // Testers see submitted tasks, not project-filtered
+          };
+          const allowedTypes = roleTaskTypes[userRole] || [];
+          if (allowedTypes.length > 0) {
+            res = { ...res, data: res.data.filter(task => allowedTypes.includes(task.taskType)) };
+          }
+        }
       } else {
         // Use my-role-tasks for team members to get tasks assigned to their role
         res = taskService.getMyRoleTasks
@@ -452,7 +473,7 @@ export default function TasksPage() {
                       <Eye className="w-4 h-4 mr-1" />
                       View
                     </Button>
-                    {canStartTask(task) && (
+                    {/* {canStartTask(task) && (
                       <Button
                         size="sm"
                         variant="secondary"
@@ -461,7 +482,7 @@ export default function TasksPage() {
                         <Play className="w-4 h-4 mr-1" />
                         Start Task
                       </Button>
-                    )}
+                    )} */}
                     {task.status === 'in_progress' && (
                       <Button
                         size="sm"

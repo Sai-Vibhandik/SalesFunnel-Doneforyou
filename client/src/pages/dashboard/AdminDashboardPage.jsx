@@ -477,7 +477,7 @@ export default function AdminDashboardPage() {
         </div>
         <div className="flex items-center gap-3">
           {/* Notifications Bell */}
-          <div className="relative">
+          {/* <div className="relative">
             <button
               onClick={() => setShowNotifications(!showNotifications)}
               className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors"
@@ -488,10 +488,10 @@ export default function AdminDashboardPage() {
                   {strategyNotifications.length}
                 </span>
               )}
-            </button>
+            </button> */}
 
             {/* Notifications Dropdown */}
-            {showNotifications && (
+            {/* {showNotifications && (
               <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-gray-200 z-50">
                 <div className="p-4 border-b border-gray-100">
                   <h3 className="font-semibold text-gray-900">Notifications</h3>
@@ -529,7 +529,7 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
             )}
-          </div>
+          </div> */}
 
           <Button variant="outline" onClick={() => navigate('/team')}>
             <Users size={18} className="mr-2" />

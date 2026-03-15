@@ -205,6 +205,8 @@ export const taskService = {
   getApprovedAssets: () => api.get('/tasks/approved-assets'),
   // Get completed assets for a project
   getProjectCompletedAssets: (projectId) => api.get(`/tasks/project/${projectId}/completed`),
+  // Get all tasks for a project (Performance Marketer)
+  getProjectAllTasks: (projectId) => api.get(`/tasks/project/${projectId}/all`),
   // Generate tasks from strategy
   generateTasks: (projectId) => api.post(`/tasks/generate/${projectId}`),
   // Get team members

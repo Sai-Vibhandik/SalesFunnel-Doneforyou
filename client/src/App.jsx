@@ -33,6 +33,9 @@ import MarketerApprovalPage from '@/pages/tasks/MarketerApprovalPage';
 import TaskDetailPage from '@/pages/tasks/TaskDetailPage';
 import ApprovedAssetsPage from '@/pages/tasks/ApprovedAssetsPage';
 
+// Assets
+import AssetsListPage from '@/pages/assets/AssetsListPage';
+
 // Team
 import { TeamManagementPage } from '@/pages/team';
 
@@ -189,7 +192,7 @@ function AppRoutes() {
         {/* Projects */}
         <Route path="/projects" element={<ProjectsListPage />} />
         <Route path="/projects/:id" element={<ProjectDetailPage />} />
-        <Route path="/projects/:id/assets" element={<ProjectAssetsPage />} />
+        <Route path="/projects/:projectId/assets" element={<ProjectAssetsPage />} />
 
         {/* Create Project - Admin only */}
         <Route
@@ -308,6 +311,22 @@ function AppRoutes() {
                   return <ApprovedAssetsPage />;
                 }
                 return <Navigate to="/tasks" replace />;
+              })()}
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Assets - Performance Marketer and Admin only */}
+        <Route
+          path="/assets"
+          element={
+            <ProtectedRoute>
+              {(() => {
+                const { user } = useAuth();
+                if (user?.role === 'performance_marketer' || user?.role === 'admin') {
+                  return <AssetsListPage />;
+                }
+                return <Navigate to="/" replace />;
               })()}
             </ProtectedRoute>
           }
